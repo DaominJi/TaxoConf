@@ -43,9 +43,9 @@ PRICING: dict[str, dict[str, tuple[float, float]]] = {
     },
     "google": {
         # Gemini 3.x series
-        "gemini-3.1-pro":       (2.00,  12.00),
-        "gemini-3.1-flash-lite": (0.25,  1.50),
-        "gemini-3-flash":       (0.50,   3.00),
+        "gemini-3.1-pro-preview":       (2.00,  12.00),
+        "gemini-3.1-flash-lite-preview": (0.25,  1.50),
+        "gemini-3-flash-preview":       (0.50,   3.00),
         # Gemini 2.5 series
         "gemini-2.5-flash-lite": (0.10,  0.40),
         "gemini-2.5-flash":     (0.30,   2.50),
@@ -59,19 +59,19 @@ PRICING: dict[str, dict[str, tuple[float, float]]] = {
     },
     "anthropic": {
         # Claude Opus series
-        "claude-opus-4.6":      (5.00,  25.00),
-        "claude-opus-4.5":      (5.00,  25.00),
-        "claude-opus-4.1":      (15.00, 75.00),
+        "claude-opus-4-6":      (5.00,  25.00),
+        "claude-opus-4-5":      (5.00,  25.00),
+        "claude-opus-4-1":      (15.00, 75.00),
         "claude-opus-4":        (15.00, 75.00),
         "claude-3-opus":        (15.00, 75.00),
         # Claude Sonnet series
-        "claude-sonnet-4.6":    (3.00,  15.00),
-        "claude-sonnet-4.5":    (3.00,  15.00),
+        "claude-sonnet-4-6":    (3.00,  15.00),
+        "claude-sonnet-4-5":    (3.00,  15.00),
         "claude-sonnet-4":      (3.00,  15.00),
         "claude-3-5-sonnet":    (3.00,  15.00),
         # Claude Haiku series
-        "claude-haiku-4.5":     (1.00,   5.00),
-        "claude-haiku-3.5":     (0.80,   4.00),
+        "claude-haiku-4-5":     (1.00,   5.00),
+        "claude-haiku-3-5":     (0.80,   4.00),
         "claude-3-haiku":       (0.25,   1.25),
         "_default":             (3.00,  15.00),
     },
