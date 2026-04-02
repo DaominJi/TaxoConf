@@ -296,6 +296,60 @@ STATIC_EXTENSIONS = {".css", ".js", ".png", ".jpg", ".svg", ".ico", ".woff", ".w
 
 
 # ════════════════════════════════════════════════════════════════════
+# Suggested capacity defaults from paper count
+# ════════════════════════════════════════════════════════════════════
+
+import math
+
+
+def compute_oral_defaults(paper_count: int) -> dict:
+    """Compute sensible oral session parameters from the number of papers."""
+    if paper_count <= 0:
+        return {"parallel_sessions": 1, "time_slots": 1,
+                "max_per_session": 5, "min_per_session": 3}
+
+    min_ps, max_ps = 3, 5
+    avg_ps = (min_ps + max_ps) / 2  # 4
+    total_sessions = math.ceil(paper_count / avg_ps)
+
+    # Choose parallel tracks (M): scale with sqrt of sessions, clamp 2-8
+    M = min(8, max(2, round(math.sqrt(total_sessions))))
+    # Derive time slots (N)
+    N = math.ceil(total_sessions / M)
+
+    # Ensure capacity bounds are valid: M*N*min <= paper_count <= M*N*max
+    # If too tight, widen by bumping N
+    while M * N * min_ps > paper_count and N > 1:
+        N -= 1
+    while M * N * max_ps < paper_count:
+        N += 1
+
+    return {
+        "parallel_sessions": M,
+        "time_slots": N,
+        "max_per_session": max_ps,
+        "min_per_session": min_ps,
+    }
+
+
+def compute_poster_defaults(paper_count: int) -> dict:
+    """Compute sensible poster session parameters from the number of papers."""
+    if paper_count <= 0:
+        return {"session_count": 1, "rows": 3, "cols": 4, "board_count": 12}
+
+    rows, cols = 3, 4
+    board_count = rows * cols  # 12 boards per session
+    session_count = math.ceil(paper_count / board_count)
+
+    return {
+        "session_count": session_count,
+        "rows": rows,
+        "cols": cols,
+        "board_count": board_count,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
 # API: Oral Session Organization
 # ════════════════════════════════════════════════════════════════════
 
@@ -309,6 +363,7 @@ async def oral_info(conference: str = Query("SIGIR25")):
 
         papers = get_papers(conf)
         stats = get_presenter_stats(papers)
+        suggested = compute_oral_defaults(len(papers))
 
         return {
             "result": {
@@ -320,6 +375,7 @@ async def oral_info(conference: str = Query("SIGIR25")):
                 "maxPapersPerPresenter": stats["maxPapersPerPresenter"],
                 "paperDataPath": f"data/{conf}/",
                 "similarityMatrixPath": f".cache/embeddings/ (auto-computed)",
+                "suggested_params": suggested,
             }
         }
     except Exception as e:
@@ -458,6 +514,7 @@ async def poster_info(conference: str = Query("SIGIR25")):
 
         papers = get_papers(conf)
         stats = get_presenter_stats(papers)
+        suggested = compute_poster_defaults(len(papers))
 
         return {
             "result": {
@@ -469,6 +526,7 @@ async def poster_info(conference: str = Query("SIGIR25")):
                 "maxPapersPerPresenter": stats["maxPapersPerPresenter"],
                 "paperDataPath": f"data/{conf}/",
                 "similarityMatrixPath": f".cache/embeddings/ (auto-computed)",
+                "suggested_params": suggested,
             }
         }
     except Exception as e:
@@ -1077,6 +1135,83 @@ _PROVIDER_ENV_KEYS = {
     "xai": "XAI_API_KEY",
 }
 
+# Models that Anthropic doesn't expose via a list endpoint
+_ANTHROPIC_MODELS = [
+    "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4",
+    "claude-opus-4-6", "claude-opus-4-5",
+    "claude-haiku-4-5",
+]
+
+
+@app.get("/api/models")
+async def list_models(provider: str = None):
+    """Fetch available models from a provider's API.
+
+    Returns a list of model IDs suitable for chat/completion.
+    Requires a valid API key (env var or manual) for the provider.
+    """
+    prov = (provider or getattr(config, "LLM_PROVIDER", "openai")).lower()
+    env_key = _PROVIDER_ENV_KEYS.get(prov, "")
+    api_key = os.environ.get(env_key) or _manual_api_keys.get(prov)
+
+    if not api_key and prov != "anthropic":
+        # Anthropic has no list endpoint anyway; others need a key
+        return {"success": False, "error": f"No API key configured for {prov}", "models": []}
+
+    try:
+        if prov == "openai":
+            from openai import OpenAI
+            client = OpenAI()
+            raw = client.models.list()
+            # Keep chat-relevant models: gpt-*, o3*, o4*
+            models = sorted(
+                m.id for m in raw
+                if any(m.id.startswith(p) for p in ("gpt-", "o3", "o4"))
+                and "audio" not in m.id
+                and "realtime" not in m.id
+                and "search" not in m.id
+            )
+
+        elif prov == "google":
+            from google import genai
+            gapi_key = api_key or os.environ.get("GEMINI_API_KEY")
+            if not gapi_key:
+                return {"success": False, "error": "No API key configured for google", "models": []}
+            client = genai.Client(api_key=gapi_key)
+            raw = client.models.list()
+            models = sorted(
+                m.name.removeprefix("models/") for m in raw
+                if "generateContent" in (m.supported_actions or [])
+                and "gemini" in m.name
+                and "image" not in m.name
+                and "tts" not in m.name
+                and "audio" not in m.name
+                and "live" not in m.name
+                and "thinking" not in m.name
+            )
+
+        elif prov == "anthropic":
+            # Anthropic has no list-models endpoint; return curated list
+            models = list(_ANTHROPIC_MODELS)
+
+        elif prov == "xai":
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
+            raw = client.models.list()
+            models = sorted(
+                m.id for m in raw
+                if "grok" in m.id
+            )
+
+        else:
+            return {"success": False, "error": f"Unknown provider: {prov}", "models": []}
+
+        return {"success": True, "models": models}
+
+    except Exception as e:
+        logger.warning(f"Failed to list models for {prov}: {e}")
+        return {"success": False, "error": str(e), "models": []}
+
 
 @app.get("/api/settings")
 async def get_settings():
@@ -1084,6 +1219,12 @@ async def get_settings():
     provider = getattr(config, "LLM_PROVIDER", "openai")
     env_key = _PROVIDER_ENV_KEYS.get(provider, "")
     has_key = bool(os.environ.get(env_key) or _manual_api_keys.get(provider))
+
+    # Key status for all providers so UI can show status on provider switch
+    api_keys_status = {
+        p: bool(os.environ.get(ek) or _manual_api_keys.get(p))
+        for p, ek in _PROVIDER_ENV_KEYS.items()
+    }
 
     return {
         "result": {
@@ -1093,6 +1234,7 @@ async def get_settings():
                 "temperature": getattr(config, "LLM_TEMPERATURE", 0.3),
                 "api_key_source": "manual" if _manual_api_keys.get(provider) else "environment",
                 "api_key_set": has_key,
+                "api_keys_status": api_keys_status,
             },
             "oral": {
                 "method": getattr(config, "ORAL_METHOD", "greedy"),
@@ -1197,23 +1339,19 @@ async def test_llm_connection(request: Request):
     config.LLM_MODEL = model
 
     try:
-        llm = LLMClient()
+        llm = LLMClient(json_mode=False)
         response = llm.chat("You are a helpful assistant.", "Say 'hello' in one word.", call_label="test-connection")
-        config.LLM_PROVIDER = old_provider
-        config.LLM_MODEL = old_model
-        if temp_key and env_key and old_env is not None:
-            os.environ[env_key] = old_env
-        elif temp_key and env_key:
-            os.environ.pop(env_key, None)
         return {"success": True, "message": f"Model responded: {response[:80]}"}
     except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
         config.LLM_PROVIDER = old_provider
         config.LLM_MODEL = old_model
-        if temp_key and env_key and old_env is not None:
-            os.environ[env_key] = old_env
-        elif temp_key and env_key:
-            os.environ.pop(env_key, None)
-        return {"success": False, "error": str(e)}
+        if temp_key and env_key:
+            if old_env is not None:
+                os.environ[env_key] = old_env
+            else:
+                os.environ.pop(env_key, None)
 
 
 # ════════════════════════════════════════════════════════════════════

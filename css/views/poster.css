@@ -1,0 +1,119 @@
+.poster-grid {
+  border: 1px solid #e7efed;
+  border-radius: 10px;
+  overflow: auto;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.poster-grid table {
+  min-width: 620px;
+}
+
+.poster-cell {
+  min-height: 70px;
+  font-size: 0.76rem;
+}
+
+.poster-session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.poster-session-card {
+  border: 1px solid #e1ece8;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #ffffff, #f4fbf9);
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(24, 48, 67, 0.06);
+}
+
+.poster-session-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e7f0ee;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.poster-session-head h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.poster-session-head .tiny {
+  margin-top: 3px;
+}
+
+.poster-layout-shell {
+  padding: 12px;
+  overflow: auto;
+  max-width: 100%;
+}
+
+.poster-layout {
+  width: 100%;
+}
+
+.poster-layout.poster-layout-line {
+  display: grid;
+  gap: 8px;
+}
+
+.poster-layout.poster-layout-rectangle {
+  display: grid;
+  gap: 8px;
+}
+
+.poster-layout.poster-layout-circle {
+  position: relative;
+  min-height: 240px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at center, rgba(19, 143, 139, 0.09) 0, rgba(19, 143, 139, 0.09) 28%, transparent 29%),
+    radial-gradient(circle at center, rgba(19, 143, 139, 0.08) 0, rgba(19, 143, 139, 0.08) 63%, transparent 64%);
+}
+
+.poster-board {
+  border: 1px solid #dbe8e4;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  padding: 8px;
+  min-height: 82px;
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  text-align: left;
+  font-size: 0.74rem;
+}
+
+.poster-board strong {
+  font-size: 0.75rem;
+}
+
+.poster-board.is-empty {
+  background: #f7fbfa;
+  color: #6d8290;
+  border-style: dashed;
+}
+
+.poster-board.circle-board {
+  position: absolute;
+  width: 86px;
+  min-height: 86px;
+  transform: translate(-50%, -50%);
+  padding: 7px;
+}
+
+.poster-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 0 12px 12px;
+}

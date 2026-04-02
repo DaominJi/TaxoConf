@@ -7,6 +7,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/views/overview.css">
+  <link rel="stylesheet" href="css/views/oral.css">
+  <link rel="stylesheet" href="css/views/poster.css">
+  <link rel="stylesheet" href="css/views/settings.css">
+  <link rel="stylesheet" href="css/views/tokens-page.css">
+  <!-- LEGACY: inline styles below will be removed once modular CSS is verified -->
   <style>
     :root {
       --bg-1: #f8f2e7;
@@ -1656,7 +1666,7 @@
             <h3 style="margin:0 0 10px;font-size:0.9rem">LLM Provider &amp; Model</h3>
             <div class="grid-2">
               <div class="control-group">
-                <label class="control-label" for="settingsProvider">Provider</label>
+                <label class="control-label" for="settingsProvider">Provider <span id="settingsKeyStatus" style="font-weight:normal;font-size:0.75rem;margin-left:4px"></span></label>
                 <select id="settingsProvider">
                   <option value="openai">OpenAI</option>
                   <option value="google">Google Gemini</option>
@@ -3224,6 +3234,19 @@
         state.oral.demoInfo = requireApiResult(resp, "Oral info");
         state.oral.availableConferences = state.oral.demoInfo.availableConferences || [];
         state.oral.conference = state.oral.demoInfo.conference || state.oral.conference;
+
+        /* Apply suggested capacity params from backend */
+        const sp = state.oral.demoInfo.suggested_params;
+        if (sp) {
+          state.oral.parallelSessions = sp.parallel_sessions;
+          state.oral.timeSlots = sp.time_slots;
+          state.oral.maxPerSession = sp.max_per_session;
+          state.oral.minPerSession = sp.min_per_session;
+          document.getElementById("oralParallelInput").value = sp.parallel_sessions;
+          document.getElementById("oralSlotsInput").value = sp.time_slots;
+          document.getElementById("oralMaxInput").value = sp.max_per_session;
+          document.getElementById("oralMinInput").value = sp.min_per_session;
+        }
       } catch (err) {
         state.oral.demoInfo = { error: err.message };
       }
@@ -4602,6 +4625,19 @@
         state.poster.demoInfo = requireApiResult(resp, "Poster info");
         state.poster.availableConferences = state.poster.demoInfo.availableConferences || [];
         state.poster.conference = state.poster.demoInfo.conference || state.poster.conference;
+
+        /* Apply suggested capacity params from backend */
+        const sp = state.poster.demoInfo.suggested_params;
+        if (sp) {
+          state.poster.sessionCount = sp.session_count;
+          state.poster.rows = sp.rows;
+          state.poster.cols = sp.cols;
+          state.poster.boardCount = sp.board_count;
+          document.getElementById("posterSessionCountInput").value = sp.session_count;
+          document.getElementById("posterRowsInput").value = sp.rows;
+          document.getElementById("posterColsInput").value = sp.cols;
+          document.getElementById("posterBoardCountInput").value = sp.board_count;
+        }
       } catch (err) {
         state.poster.demoInfo = { error: err.message };
       }
@@ -5827,17 +5863,25 @@
 
     /* ═══════════════════ Settings Page Logic ═══════════════════ */
 
-    const PROVIDER_MODELS = {
-      openai:    ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o4-mini"],
-      google:    ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro"],
-      anthropic: ["claude-sonnet-4.6", "claude-sonnet-4.5", "claude-opus-4.6", "claude-opus-4.5", "claude-haiku-4.5"],
-      xai:       ["grok-3", "grok-4", "grok-4-fast"],
+    const PROVIDER_KEY_PLACEHOLDERS = {
+      openai:    "sk-...",
+      google:    "AI...",
+      anthropic: "sk-ant-...",
+      xai:       "xai-...",
     };
 
-    function updateModelDropdown(keepValue) {
-      const prov = document.getElementById("settingsProvider").value;
+    /* Tracks which providers have API keys configured (populated by loadSettings) */
+    let _apiKeysStatus = {};
+
+    const PROVIDER_MODELS = {
+      openai:    ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o3", "o4-mini"],
+      google:    ["gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"],
+      anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-opus-4-6", "claude-opus-4-5", "claude-haiku-4-5"],
+      xai:       ["grok-3-mini", "grok-3", "grok-4", "grok-4-fast"],
+    };
+
+    function _populateModelSelect(models, keepValue) {
       const sel = document.getElementById("settingsModel");
-      const models = PROVIDER_MODELS[prov] || [];
       const prev = keepValue || sel.value;
       sel.innerHTML = "";
       models.forEach(m => {
@@ -5846,10 +5890,46 @@
         opt.textContent = m;
         sel.appendChild(opt);
       });
-      /* Restore previous selection if it exists in the new list */
       if (models.includes(prev)) {
         sel.value = prev;
       }
+    }
+
+    async function updateModelDropdown(keepValue) {
+      const prov = document.getElementById("settingsProvider").value;
+      updateKeyStatus();
+      updateKeyPlaceholder();
+
+      /* Try fetching live models from the provider API */
+      try {
+        const res = await fetch(`${API_BASE}/models?provider=${prov}`);
+        const data = await res.json();
+        if (data.success && data.models && data.models.length > 0) {
+          _populateModelSelect(data.models, keepValue);
+          return;
+        }
+      } catch (_) { /* fall through to hardcoded list */ }
+
+      /* Fallback: use hardcoded list */
+      _populateModelSelect(PROVIDER_MODELS[prov] || [], keepValue);
+    }
+
+    function updateKeyStatus() {
+      const prov = document.getElementById("settingsProvider").value;
+      const el = document.getElementById("settingsKeyStatus");
+      const hasKey = _apiKeysStatus[prov];
+      if (hasKey) {
+        el.textContent = "(Key configured)";
+        el.style.color = "var(--accent)";
+      } else {
+        el.textContent = "(No key)";
+        el.style.color = "var(--danger, #c44)";
+      }
+    }
+
+    function updateKeyPlaceholder() {
+      const prov = document.getElementById("settingsProvider").value;
+      document.getElementById("settingsApiKey").placeholder = PROVIDER_KEY_PLACEHOLDERS[prov] || "API key...";
     }
 
     function toggleManualKeyRow() {
@@ -5863,9 +5943,9 @@
         const data = await res.json();
         const s = data.result || data;
         if (s.llm) {
+          if (s.llm.api_keys_status) _apiKeysStatus = s.llm.api_keys_status;
           document.getElementById("settingsProvider").value = s.llm.provider || "openai";
-          updateModelDropdown(s.llm.model || "");
-          document.getElementById("settingsModel").value = s.llm.model || "";
+          await updateModelDropdown(s.llm.model || "");
           document.getElementById("settingsTemp").value = s.llm.temperature ?? 0.3;
           const src = s.llm.api_key_source || "environment";
           document.querySelectorAll('input[name="apiKeySource"]').forEach(r => r.checked = r.value === src);
@@ -5941,7 +6021,11 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         statusEl.textContent = "Saved!";
         statusEl.style.color = "var(--accent)";
-        /* Clear similarity/taxonomy caches since settings changed */
+        /* Refresh key status if a manual key was just saved */
+        if (body.llm.api_key) {
+          _apiKeysStatus[body.llm.provider] = true;
+          updateKeyStatus();
+        }
         showToast("Settings saved successfully.");
       } catch (e) {
         statusEl.textContent = "Save failed: " + e.message;
@@ -5958,12 +6042,25 @@
       resultEl.style.color = "var(--ink-soft)";
 
       const apiKeySource = document.querySelector('input[name="apiKeySource"]:checked').value;
+      const prov = document.getElementById("settingsProvider").value;
       const body = {
-        provider: document.getElementById("settingsProvider").value,
+        provider: prov,
         model: document.getElementById("settingsModel").value,
       };
       if (apiKeySource === "manual") {
-        body.api_key = document.getElementById("settingsApiKey").value.trim();
+        const key = document.getElementById("settingsApiKey").value.trim();
+        if (!key) {
+          resultEl.textContent = "Please enter an API key first.";
+          resultEl.style.color = "var(--danger, #c44)";
+          btn.disabled = false;
+          return;
+        }
+        body.api_key = key;
+      } else if (!_apiKeysStatus[prov]) {
+        resultEl.textContent = "No API key found. Set " + ({openai:"OPENAI_API_KEY",google:"GOOGLE_API_KEY",anthropic:"ANTHROPIC_API_KEY",xai:"XAI_API_KEY"}[prov] || "the env var") + " or enter one manually.";
+        resultEl.style.color = "var(--danger, #c44)";
+        btn.disabled = false;
+        return;
       }
 
       try {

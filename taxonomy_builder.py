@@ -131,10 +131,11 @@ class LLMClient:
     """
 
     def __init__(self, provider: str = None, model: str = None,
-                 temperature: float = None):
+                 temperature: float = None, json_mode: bool = True):
         self.provider = (provider or getattr(config, "LLM_PROVIDER", "openai")).lower()
         self.model = model or config.LLM_MODEL
         self.temperature = temperature if temperature is not None else config.LLM_TEMPERATURE
+        self.json_mode = json_mode
         self.tracker = get_global_tracker()
 
         self._init_client()
@@ -222,15 +223,17 @@ class LLMClient:
 
     def _chat_openai(self, system: str, user: str, call_label: str) -> str:
         """OpenAI / xAI (OpenAI-compatible) chat completion."""
-        resp = self.client.chat.completions.create(
+        kwargs = dict(
             model=self.model,
             temperature=self.temperature,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_format={"type": "json_object"},
         )
+        if self.json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        resp = self.client.chat.completions.create(**kwargs)
         text = resp.choices[0].message.content.strip()
 
         # Track tokens
@@ -251,13 +254,15 @@ class LLMClient:
         from google.genai import types
 
         combined_prompt = f"{system}\n\n{user}"
+        gen_config = types.GenerateContentConfig(
+            temperature=self.temperature,
+        )
+        if self.json_mode:
+            gen_config.response_mime_type = "application/json"
         response = self.client.models.generate_content(
             model=self.model,
             contents=combined_prompt,
-            config=types.GenerateContentConfig(
-                temperature=self.temperature,
-                response_mime_type="application/json",
-            ),
+            config=gen_config,
         )
         text = response.text.strip()
 

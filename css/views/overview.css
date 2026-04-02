@@ -1,0 +1,47 @@
+.overview-flow {
+  display: grid;
+  gap: 10px;
+}
+
+.overview-step {
+  border: 1px solid #e2ece9;
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(135deg, #ffffff, #f6fbfa);
+}
+
+.overview-step .step-kicker {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a7380;
+  margin-bottom: 4px;
+}
+
+.overview-step .step-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #264454;
+  margin-bottom: 4px;
+}
+
+.overview-step .step-copy {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.tech-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.tech-note {
+  border-left: 4px solid var(--accent);
+  padding: 8px 10px;
+  background: #f4fbf9;
+  border-radius: 10px;
+  font-size: 0.76rem;
+  color: #355668;
+  line-height: 1.45;
+}
