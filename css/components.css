@@ -447,15 +447,16 @@ tbody tr.selected { background: #eaf8f5; }
 }
 
 /* Modal */
+/* ── Slide-in side panel (replaces centered modal) ────── */
+
 .modal-shell {
   position: fixed;
   inset: 0;
   display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(23, 37, 48, 0.35);
-  padding: 20px;
-  z-index: 20;
+  justify-content: flex-end;
+  background: rgba(23, 37, 48, 0.25);
+  z-index: 30;
+  transition: background 0.25s ease;
 }
 
 .modal-shell.is-open {
@@ -463,13 +464,19 @@ tbody tr.selected { background: #eaf8f5; }
 }
 
 .modal-card {
-  width: min(760px, 100%);
-  max-height: 82vh;
+  width: min(520px, 92vw);
+  height: 100vh;
   overflow: auto;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 18px 40px rgba(18, 42, 60, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 0;
+  border-left: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: -8px 0 32px rgba(18, 42, 60, 0.15);
+  animation: slideInRight 0.22s ease-out;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0.5; }
+  to   { transform: translateX(0);    opacity: 1; }
 }
 
 .modal-head {
@@ -477,11 +484,13 @@ tbody tr.selected { background: #eaf8f5; }
   justify-content: space-between;
   gap: 10px;
   align-items: center;
-  padding: 14px 16px 10px;
+  padding: 16px 18px 12px;
   border-bottom: 1px solid #e8f0ee;
   position: sticky;
   top: 0;
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 1;
 }
 
@@ -491,7 +500,7 @@ tbody tr.selected { background: #eaf8f5; }
 }
 
 .modal-body {
-  padding: 14px 16px 16px;
+  padding: 16px 18px 20px;
 }
 
 .modal-close {
@@ -499,8 +508,20 @@ tbody tr.selected { background: #eaf8f5; }
   color: #345869;
   border: 1px solid #d8e7e3;
   border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.74rem;
+  padding: 6px 14px;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.modal-close:hover {
+  background: #ddf0eb;
+}
+
+/* On small screens, side panel goes full-width */
+@media (max-width: 620px) {
+  .modal-card {
+    width: 100vw;
+  }
 }
 
 .modal-field-grid {
