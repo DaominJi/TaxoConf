@@ -1,0 +1,98 @@
+.result-split {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.schedule-table {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid #e7efed;
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.schedule-table table {
+  width: max-content;
+  min-width: 680px;
+}
+
+.schedule-cell {
+  min-height: 74px;
+  display: grid;
+  gap: 5px;
+}
+
+.schedule-meta {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: #4b6777;
+}
+
+.session-tile {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #dce9e5;
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(140deg, #ffffff, #f3faf8);
+  color: var(--ink);
+  min-height: 118px;
+}
+
+.session-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(24, 48, 67, 0.08);
+}
+
+.session-tile .session-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.session-tile .session-preview {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #466171;
+  line-height: 1.35;
+}
+
+.last-mile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.last-mile-tile {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #dce8e4;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #ffffff, #f4fbf9);
+  color: var(--ink);
+  padding: 10px;
+  min-height: 112px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  box-shadow: 0 8px 18px rgba(24, 48, 67, 0.05);
+}
+
+.last-mile-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(24, 48, 67, 0.08);
+}
+
+.last-mile-tile strong {
+  font-size: 0.82rem;
+}

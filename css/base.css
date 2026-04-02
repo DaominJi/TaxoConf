@@ -1,0 +1,51 @@
+* { box-sizing: border-box; }
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(224, 106, 45, 0.18), transparent 42%),
+    radial-gradient(circle at 88% 14%, rgba(19, 143, 139, 0.2), transparent 40%),
+    linear-gradient(165deg, var(--bg-1), var(--bg-2) 54%, #fbefe0 100%);
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.86rem;
+  padding: 8px 9px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.tiny {
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+.mono {
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.74rem;
+}
+
+.is-hidden {
+  display: none !important;
+}
