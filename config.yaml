@@ -1,0 +1,94 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Session Organizer Configuration
+# ═══════════════════════════════════════════════════════════════════════
+# All parameters for the LLM-taxonomy conference session organizer.
+# Pass this file via:  python main.py --config config.yaml
+# CLI arguments still override values set here.
+
+# ─── Input / Output ──────────────────────────────────────────────────
+input: ../SIGIR25_Full_Papers.json   # Path to papers JSON file (null = use --demo)
+output_dir: output                   # Output directory for schedules, taxonomy, etc.
+mode: both                           # "oral", "poster", or "both"
+demo: false                          # Use synthetic demo data (no LLM needed)
+
+# ─── LLM Settings ───────────────────────────────────────────────────
+# Supported providers: "openai", "google", "anthropic", "xai"
+#
+# Provider    | Env Variable       | Example Models
+# ------------|--------------------|-----------------------------------------
+# openai      | OPENAI_API_KEY     | gpt-4o, gpt-4o-mini, gpt-4.1, o3-mini
+# google      | GOOGLE_API_KEY     | gemini-2.5-pro, gemini-2.5-flash
+# anthropic   | ANTHROPIC_API_KEY  | claude-sonnet-4-20250514, claude-opus-4-20250514
+# xai         | XAI_API_KEY        | grok-3, grok-3-mini
+#
+llm:
+  provider: openai              # LLM provider (openai / google / anthropic / xai)
+  model: gpt-5.4        # Model name (provider-specific)
+  temperature: 0.3              # Low temperature for deterministic outputs
+  max_retries: 3                # Retries on API failure
+  max_workers: 16               # Max parallel threads for taxonomy expansion
+
+# ─── Taxonomy Construction ──────────────────────────────────────────
+taxonomy:
+  max_depth: 3                  # Maximum depth of the taxonomy tree
+  min_papers_to_split: 3        # Don't subdivide nodes with fewer papers
+  max_children: 8               # Max children per taxonomy node
+  token_threshold: 100000       # If estimated tokens exceed this, use titles only
+  token_est_chars_per_token: 4  # Rough char-to-token ratio
+
+# ─── Oral Sessions ──────────────────────────────────────────────────
+oral:
+  session_min: 4                # Minimum papers per oral session
+  session_max: 6                # Maximum papers per oral session
+  num_slots: 10                 # Number of oral time slots
+  num_tracks: 5                 # Number of parallel oral rooms/tracks
+
+  # Session formation method
+  method: greedy                # "greedy" (Method 1) or "optimization" (Method 2)
+  solver: heuristic             # For optimization method: "ilp" or "heuristic"
+  alpha: 1.0                    # Taxonomy vs embedding distance blend (0.0-1.0)
+                                # 1.0 = pure taxonomy, 0.0 = pure embedding
+  enable_conflict_avoidance: true  # Enable presenter conflict constraints
+
+  # Scheduling
+  audience_sim_threshold: 0.1   # Minimum inter-session similarity for soft conflict edge
+
+  # ILP solver settings
+  ilp_time_limit: 300           # ILP solver time limit (seconds)
+  ilp_mip_gap: 0.01             # Accept solutions within 1% of optimal
+
+  # Last-mile edit settings
+  max_repair_iterations: 50     # Max iterations for conflict repair
+
+# ─── Poster Sessions ────────────────────────────────────────────────
+poster:
+  session_min: 40               # Minimum papers per poster session
+  session_max: 50               # Maximum papers per poster session
+  num_slots: 3                  # Number of poster time slots
+  num_parallel: 2               # Number of parallel poster areas
+
+  # Session formation method (same two methods as oral)
+  method: greedy                # "greedy" (Method 1) or "optimization" (Method 2)
+  solver: heuristic             # For optimization method: "ilp" or "heuristic"
+  alpha: 1.0                    # Taxonomy vs embedding distance blend (0.0-1.0)
+  enable_conflict_avoidance: true  # Enable presenter conflict constraints
+
+  # Board layout (Stage 1.5)
+  floor_plan: rectangle         # Board layout: line, circle, rectangle
+  rect_cols: 6                  # Columns per row in rectangle layout
+  proximity: true               # Enable proximity-based board assignment
+  circle_right_priority: true   # Prioritize right-side similarity in circle
+  circle_forward_weights: [1.0, 0.4]  # Directional lookahead weights for circle
+
+# ─── Cross-Type Scheduling ──────────────────────────────────────────
+cross_type_scheduling: false    # Joint oral+poster scheduling when slots overlap
+
+# ─── Similarity ─────────────────────────────────────────────────────
+similarity:
+  method: tfidf                 # "tfidf" (no extra deps) or "embedding"
+  embedding_model: all-MiniLM-L6-v2  # sentence-transformers model (if embedding)
+
+# ─── Embedding Cache ────────────────────────────────────────────────
+embedding_cache:
+  enabled: true                 # Cache computed embeddings to disk
+  cache_dir: .cache/embeddings  # Directory for cached .npz files

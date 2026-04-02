@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Taxonomy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #fafbfc;
+    --card-bg: #ffffff;
+    --border: #e2e6ea;
+    --text: #1a2332;
+    --text-muted: #5a6a7e;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --leaf-bg: #f0fdf4;
+    --leaf-border: #86efac;
+    --paper-bg: #f8fafc;
+    --paper-border: #e2e8f0;
+    --hover: #f1f5f9;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,.1);
+    --radius: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    color: #fff;
+    padding: 2rem 2.5rem;
+    font-family: 'Source Serif 4', Georgia, serif;
+  }
+  header h1 { font-size: 1.75rem; font-weight: 700; }
+  header .subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: .875rem;
+    opacity: .85;
+    margin-top: .35rem;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: .5rem;
+    padding: 1rem 2.5rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .toolbar button {
+    font-family: 'Inter', sans-serif;
+    font-size: .8rem;
+    font-weight: 500;
+    padding: .4rem .9rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .toolbar button:hover {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .toolbar .search-box {
+    flex: 1;
+    max-width: 320px;
+    margin-left: auto;
+  }
+  .toolbar input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: .8rem;
+    padding: .4rem .75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .toolbar input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+
+  .tree-container {
+    max-width: 1100px;
+    margin: 1.5rem auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .node {
+    margin-left: 1.25rem;
+    border-left: 2px solid var(--border);
+    padding-left: 0;
+  }
+  .tree-container > .node {
+    margin-left: 0;
+    border-left: none;
+  }
+
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .55rem .75rem;
+    margin: 2px 0 2px 0;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background .15s;
+    user-select: none;
+  }
+  .node-header:hover { background: var(--hover); }
+  .node-header.leaf { cursor: default; }
+  .node-header.leaf:hover { background: transparent; }
+
+  .toggle {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .7rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform .2s;
+  }
+  .toggle.collapsed { transform: rotate(-90deg); }
+  .toggle.empty { visibility: hidden; }
+
+  .node-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .node-name {
+    font-weight: 600;
+    font-size: .9rem;
+  }
+
+  .node-badge {
+    font-size: .7rem;
+    font-weight: 600;
+    padding: .15rem .5rem;
+    border-radius: 999px;
+    background: var(--accent-light);
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .node-desc {
+    font-size: .78rem;
+    color: var(--text-muted);
+    margin-left: 2.6rem;
+    padding: 0 .75rem .25rem;
+    font-style: italic;
+  }
+
+  .node-children {
+    overflow: hidden;
+    transition: max-height .3s ease;
+  }
+  .node-children.collapsed {
+    max-height: 0 !important;
+  }
+
+  .paper-list {
+    margin: .25rem 0 .5rem 2.6rem;
+    padding: 0 .75rem;
+  }
+
+  .paper-card {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    padding: .5rem .7rem;
+    margin: 3px 0;
+    background: var(--paper-bg);
+    border: 1px solid var(--paper-border);
+    border-radius: 8px;
+    transition: box-shadow .15s;
+  }
+  .paper-card:hover {
+    box-shadow: var(--shadow);
+  }
+
+  .paper-id {
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: .1rem .4rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .paper-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .paper-title {
+    font-size: .82rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .paper-authors {
+    font-size: .73rem;
+    color: var(--text-muted);
+    margin-top: .15rem;
+  }
+
+  .highlight {
+    background: #fef08a;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  .stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: .5rem;
+    font-size: .8rem;
+    color: rgba(255,255,255,.9);
+  }
+  .stats span { font-weight: 600; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Session Taxonomy</h1>
+  <div class="stats" id="stats"></div>
+</header>
+
+<div class="toolbar">
+  <button onclick="expandAll()">Expand All</button>
+  <button onclick="collapseAll()">Collapse All</button>
+  <button onclick="expandLevel(1)">Level 1</button>
+  <button onclick="expandLevel(2)">Level 2</button>
+  <div class="search-box">
+    <input type="text" id="search" placeholder="Search papers or topics..." oninput="handleSearch(this.value)">
+  </div>
+</div>
+
+<div class="tree-container" id="tree"></div>
+
+<script>
+const DATA = {"id": "0", "name": "All Papers", "description": "Root", "count": 30, "is_leaf": false, "children": [{"id": "0.0", "name": "Query Optimization", "description": "Learned and adaptive query optimization techniques", "count": 5, "is_leaf": true, "papers": [{"id": "p01", "title": "Learned Cost Models for Query Optimization", "authors": "Alice Chen, Bob Zhang"}, {"id": "p02", "title": "Reinforcement Learning for Join Order Selection", "authors": "Alice Chen, Carol Li"}, {"id": "p03", "title": "Adaptive Query Re-Optimization Using Runtime Feedback", "authors": "David Wang, Eve Liu"}, {"id": "p04", "title": "Cardinality Estimation with Graph Neural Networks", "authors": "Bob Zhang, Frank Zhao"}, {"id": "p05", "title": "Parametric Query Optimization via Workload Embeddings", "authors": "Carol Li, Grace Wu"}]}, {"id": "0.1", "name": "Vector Search", "description": "Approximate nearest neighbor and vector retrieval", "count": 4, "is_leaf": true, "papers": [{"id": "p06", "title": "High-Dimensional ANN Search with Learned Hashing", "authors": "Grace Wu, Henry Xu"}, {"id": "p07", "title": "GPU-Accelerated Vector Search for Billion-Scale Datasets", "authors": "Grace Wu, Ivan Patel"}, {"id": "p08", "title": "Filtered Vector Search: Combining Metadata Predicates with ANN", "authors": "Jack Ma, Kelly Sun"}, {"id": "p09", "title": "Product Quantization Revisited: Residual Codebooks for Dense Retrieval", "authors": "Henry Xu, Leo Park"}]}, {"id": "0.2", "name": "Transaction Processing", "description": "Concurrency control, HTAP, and distributed transactions", "count": 5, "is_leaf": true, "papers": [{"id": "p10", "title": "Deterministic Concurrency Control for Multi-Core OLTP", "authors": "Leo Park, Mia Chen"}, {"id": "p11", "title": "Disaggregated Memory Transactions in Cloud-Native Databases", "authors": "Leo Park, Nina Huang"}, {"id": "p12", "title": "Hybrid OLTP/OLAP on Modern Hardware: An HTAP Perspective", "authors": "Oscar Tan, Mia Chen"}, {"id": "p13", "title": "Epoch-Based Isolation for Serializable Multi-Version Concurrency", "authors": "Nina Huang, Pat Reeves"}, {"id": "p14", "title": "Persistent Memory Transactions with Hardware Log Offloading", "authors": "Oscar Tan, Quincy Ng"}]}, {"id": "0.3", "name": "Data Integration", "description": "Schema matching, entity resolution, data lake discovery", "count": 5, "is_leaf": true, "papers": [{"id": "p15", "title": "Schema Matching at Scale with Pre-Trained Language Models", "authors": "David Wang, Quincy Ng"}, {"id": "p16", "title": "Entity Resolution via Contrastive Learning", "authors": "Rachel Kim, Sam Lee"}, {"id": "p17", "title": "Integrable Set Discovery in Data Lakes", "authors": "Rachel Kim, Tom Jiang"}, {"id": "p18", "title": "Holistic Data Profiling for Automated Data Discovery", "authors": "Sam Lee, Uma Sharma"}, {"id": "p19", "title": "Federated Table Search Across Organizational Boundaries", "authors": "Tom Jiang, Victor Gao"}]}, {"id": "0.4", "name": "LLM for Data Management", "description": "Large language models for SQL, cleaning, and QA over data", "count": 6, "is_leaf": true, "papers": [{"id": "p20", "title": "Text-to-SQL with Chain-of-Thought Prompting", "authors": "Uma Sharma, Victor Gao"}, {"id": "p21", "title": "LLM-Augmented Data Cleaning Pipelines", "authors": "Uma Sharma, Wendy Zhou"}, {"id": "p22", "title": "Natural Language Interfaces for Knowledge Graphs", "authors": "Xavier Qin, Yara Osman"}, {"id": "p23", "title": "Retrieval-Augmented Generation for Database Documentation", "authors": "Victor Gao, Zach Ye"}, {"id": "p24", "title": "Self-Debugging SQL with LLM Feedback Loops", "authors": "Wendy Zhou, Alice Chen"}, {"id": "p25", "title": "Benchmarking LLMs on Complex Analytical SQL Queries", "authors": "Xavier Qin, Bob Zhang"}]}, {"id": "0.5", "name": "Graph Analytics", "description": "Graph partitioning, GNNs, subgraph matching, graph DB queries", "count": 5, "is_leaf": true, "papers": [{"id": "p26", "title": "Streaming Graph Partitioning for Distributed Analytics", "authors": "Zach Ye, Alice Chen"}, {"id": "p27", "title": "Temporal Graph Neural Networks for Dynamic Relationship Prediction", "authors": "Zach Ye, Bob Zhang"}, {"id": "p28", "title": "Subgraph Matching on Property Graphs with Attributed Edges", "authors": "Frank Zhao, Kelly Sun"}, {"id": "p29", "title": "Distributed Triangle Counting in Trillion-Edge Graphs", "authors": "Jack Ma, Eve Liu"}, {"id": "p30", "title": "Graph Database Query Optimization via Worst-Case Optimal Joins", "authors": "Frank Zhao, David Wang"}]}]};
+
+// ── Build HTML ───────────────────────────────────────
+function buildNode(node, depth) {
+  const div = document.createElement('div');
+  div.className = 'node';
+  div.dataset.depth = depth;
+  div.dataset.nodeId = node.id;
+
+  const hasChildren = node.children && node.children.length > 0;
+  const hasPapers = node.papers && node.papers.length > 0;
+  const isExpandable = hasChildren || hasPapers;
+
+  // Header row
+  const header = document.createElement('div');
+  header.className = 'node-header' + (isExpandable ? '' : ' leaf');
+
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle' + (isExpandable ? '' : ' empty');
+  toggle.textContent = '▼';
+
+  const icon = document.createElement('span');
+  icon.className = 'node-icon';
+  icon.textContent = node.is_leaf ? '📄' : '📁';
+
+  const name = document.createElement('span');
+  name.className = 'node-name';
+  name.textContent = node.name;
+
+  const badge = document.createElement('span');
+  badge.className = 'node-badge';
+  badge.textContent = node.count + ' paper' + (node.count !== 1 ? 's' : '');
+
+  header.append(toggle, icon, name, badge);
+  div.appendChild(header);
+
+  // Description
+  if (node.description && depth > 0) {
+    const desc = document.createElement('div');
+    desc.className = 'node-desc';
+    desc.textContent = node.description;
+    div.appendChild(desc);
+  }
+
+  // Children wrapper
+  const childrenDiv = document.createElement('div');
+  childrenDiv.className = 'node-children';
+
+  // Papers (for leaf nodes)
+  if (hasPapers) {
+    const paperList = document.createElement('div');
+    paperList.className = 'paper-list';
+    for (const p of node.papers) {
+      const card = document.createElement('div');
+      card.className = 'paper-card';
+      card.dataset.searchText = (p.id + ' ' + p.title + ' ' + p.authors).toLowerCase();
+
+      const idSpan = document.createElement('span');
+      idSpan.className = 'paper-id';
+      idSpan.textContent = p.id;
+
+      const info = document.createElement('div');
+      info.className = 'paper-info';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'paper-title';
+      titleEl.textContent = p.title;
+      const authorsEl = document.createElement('div');
+      authorsEl.className = 'paper-authors';
+      authorsEl.textContent = p.authors;
+      info.append(titleEl, authorsEl);
+
+      card.append(idSpan, info);
+      paperList.appendChild(card);
+    }
+    childrenDiv.appendChild(paperList);
+  }
+
+  // Child nodes
+  if (hasChildren) {
+    for (const child of node.children) {
+      childrenDiv.appendChild(buildNode(child, depth + 1));
+    }
+  }
+
+  div.appendChild(childrenDiv);
+
+  // Click to toggle
+  if (isExpandable) {
+    header.addEventListener('click', () => {
+      const isCollapsed = childrenDiv.classList.toggle('collapsed');
+      toggle.classList.toggle('collapsed', isCollapsed);
+    });
+  }
+
+  return div;
+}
+
+// ── Expand / Collapse helpers ────────────────────────
+function expandAll() {
+  document.querySelectorAll('.node-children').forEach(el => {
+    el.classList.remove('collapsed');
+  });
+  document.querySelectorAll('.toggle').forEach(el => {
+    el.classList.remove('collapsed');
+  });
+}
+
+function collapseAll() {
+  document.querySelectorAll('.node-children').forEach(el => {
+    el.classList.add('collapsed');
+  });
+  document.querySelectorAll('.toggle:not(.empty)').forEach(el => {
+    el.classList.add('collapsed');
+  });
+  // Always expand root
+  const root = document.querySelector('#tree > .node > .node-children');
+  const rootToggle = document.querySelector('#tree > .node > .node-header .toggle');
+  if (root) { root.classList.remove('collapsed'); }
+  if (rootToggle) { rootToggle.classList.remove('collapsed'); }
+}
+
+function expandLevel(level) {
+  collapseAll();
+  document.querySelectorAll('.node').forEach(el => {
+    const d = parseInt(el.dataset.depth);
+    if (d <= level) {
+      const ch = el.querySelector(':scope > .node-children');
+      const tg = el.querySelector(':scope > .node-header .toggle');
+      if (ch) ch.classList.remove('collapsed');
+      if (tg) tg.classList.remove('collapsed');
+    }
+  });
+}
+
+// ── Search ───────────────────────────────────────────
+function handleSearch(query) {
+  const q = query.trim().toLowerCase();
+  // Remove old highlights
+  document.querySelectorAll('.highlight').forEach(el => {
+    el.replaceWith(el.textContent);
+  });
+
+  if (!q) {
+    // Show everything, restore collapse state
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('hidden'));
+    document.querySelectorAll('.paper-card').forEach(c => c.classList.remove('hidden'));
+    return;
+  }
+
+  // Hide all, then selectively show matches
+  const allPapers = document.querySelectorAll('.paper-card');
+  const allNodes = document.querySelectorAll('.node');
+
+  allPapers.forEach(c => c.classList.add('hidden'));
+  allNodes.forEach(n => n.classList.add('hidden'));
+
+  // Find matching papers
+  allPapers.forEach(card => {
+    if (card.dataset.searchText.includes(q)) {
+      card.classList.remove('hidden');
+      // Expand + show ancestors
+      let el = card.closest('.node');
+      while (el) {
+        el.classList.remove('hidden');
+        const ch = el.querySelector(':scope > .node-children');
+        const tg = el.querySelector(':scope > .node-header .toggle');
+        if (ch) ch.classList.remove('collapsed');
+        if (tg) tg.classList.remove('collapsed');
+        el = el.parentElement.closest('.node');
+      }
+    }
+  });
+
+  // Also match on node names
+  allNodes.forEach(node => {
+    const nameEl = node.querySelector(':scope > .node-header .node-name');
+    const descEl = node.querySelector(':scope > .node-desc');
+    const text = ((nameEl ? nameEl.textContent : '') + ' ' + (descEl ? descEl.textContent : '')).toLowerCase();
+    if (text.includes(q)) {
+      node.classList.remove('hidden');
+      // show all descendants
+      node.querySelectorAll('.node').forEach(d => d.classList.remove('hidden'));
+      node.querySelectorAll('.paper-card').forEach(c => c.classList.remove('hidden'));
+      const ch = node.querySelector(':scope > .node-children');
+      const tg = node.querySelector(':scope > .node-header .toggle');
+      if (ch) ch.classList.remove('collapsed');
+      if (tg) tg.classList.remove('collapsed');
+      // show ancestors
+      let el = node.parentElement.closest('.node');
+      while (el) {
+        el.classList.remove('hidden');
+        const ch2 = el.querySelector(':scope > .node-children');
+        const tg2 = el.querySelector(':scope > .node-header .toggle');
+        if (ch2) ch2.classList.remove('collapsed');
+        if (tg2) tg2.classList.remove('collapsed');
+        el = el.parentElement.closest('.node');
+      }
+    }
+  });
+}
+
+// ── Init ─────────────────────────────────────────────
+function countTotalPapers(node) {
+  let c = (node.papers || []).length;
+  for (const ch of (node.children || [])) c += countTotalPapers(ch);
+  return c;
+}
+function countLeaves(node) {
+  if (node.is_leaf) return 1;
+  let c = 0;
+  for (const ch of (node.children || [])) c += countLeaves(ch);
+  return c;
+}
+function maxDepth(node, d) {
+  if (!node.children || node.children.length === 0) return d;
+  let m = d;
+  for (const ch of node.children) m = Math.max(m, maxDepth(ch, d + 1));
+  return m;
+}
+
+const tree = document.getElementById('tree');
+tree.appendChild(buildNode(DATA, 0));
+
+// Stats
+const stats = document.getElementById('stats');
+const totalPapers = countTotalPapers(DATA);
+const totalLeaves = countLeaves(DATA);
+const depth = maxDepth(DATA, 0);
+stats.innerHTML = '<span>' + totalPapers + '</span> papers &middot; '
+  + '<span>' + totalLeaves + '</span> leaf topics &middot; '
+  + '<span>' + depth + '</span> levels deep';
+
+// Default: expand level 1
+expandLevel(1);
+</script>
+</body>
+</html>

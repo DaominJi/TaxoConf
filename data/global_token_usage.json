@@ -1,0 +1,8 @@
+{
+  "total_calls": 83,
+  "total_prompt_tokens": 67216,
+  "total_completion_tokens": 14826,
+  "total_tokens": 82042,
+  "total_cost_usd": 0.3163,
+  "last_reset": "2026-04-02T11:33:07.507638+00:00"
+}

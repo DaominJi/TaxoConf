@@ -1,0 +1,825 @@
+{
+  "type": "poster",
+  "taxonomy": {
+    "node_id": "0",
+    "name": "All Papers",
+    "description": "Root",
+    "paper_ids": [],
+    "is_leaf": false,
+    "depth": 0,
+    "children": [
+      {
+        "node_id": "0.0",
+        "name": "Query Optimization",
+        "description": "Learned and adaptive query optimization techniques",
+        "paper_ids": [
+          "p01",
+          "p02",
+          "p03",
+          "p04",
+          "p05"
+        ],
+        "is_leaf": true,
+        "depth": 1
+      },
+      {
+        "node_id": "0.1",
+        "name": "Vector Search",
+        "description": "Approximate nearest neighbor and vector retrieval",
+        "paper_ids": [
+          "p06",
+          "p07",
+          "p08",
+          "p09"
+        ],
+        "is_leaf": true,
+        "depth": 1
+      },
+      {
+        "node_id": "0.2",
+        "name": "Transaction Processing",
+        "description": "Concurrency control, HTAP, and distributed transactions",
+        "paper_ids": [
+          "p10",
+          "p11",
+          "p12",
+          "p13",
+          "p14"
+        ],
+        "is_leaf": true,
+        "depth": 1
+      },
+      {
+        "node_id": "0.3",
+        "name": "Data Integration",
+        "description": "Schema matching, entity resolution, data lake discovery",
+        "paper_ids": [
+          "p15",
+          "p16",
+          "p17",
+          "p18",
+          "p19"
+        ],
+        "is_leaf": true,
+        "depth": 1
+      },
+      {
+        "node_id": "0.4",
+        "name": "LLM for Data Management",
+        "description": "Large language models for SQL, cleaning, and QA over data",
+        "paper_ids": [
+          "p20",
+          "p21",
+          "p22",
+          "p23",
+          "p24",
+          "p25"
+        ],
+        "is_leaf": true,
+        "depth": 1
+      },
+      {
+        "node_id": "0.5",
+        "name": "Graph Analytics",
+        "description": "Graph partitioning, GNNs, subgraph matching, graph DB queries",
+        "paper_ids": [
+          "p26",
+          "p27",
+          "p28",
+          "p29",
+          "p30"
+        ],
+        "is_leaf": true,
+        "depth": 1
+      }
+    ]
+  },
+  "sessions": [
+    {
+      "session_id": "PS001",
+      "name": "All Papers",
+      "description": "Root",
+      "time_slot": 0,
+      "area": 0,
+      "floor_plan": "line",
+      "boards": [
+        {
+          "paper_id": "p03",
+          "title": "Adaptive Query Re-Optimization Using Runtime Feedback",
+          "authors": [
+            "David Wang",
+            "Eve Liu"
+          ],
+          "board_index": 0,
+          "row": 0,
+          "col": 0
+        },
+        {
+          "paper_id": "p05",
+          "title": "Parametric Query Optimization via Workload Embeddings",
+          "authors": [
+            "Carol Li",
+            "Grace Wu"
+          ],
+          "board_index": 1,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "paper_id": "p01",
+          "title": "Learned Cost Models for Query Optimization",
+          "authors": [
+            "Alice Chen",
+            "Bob Zhang"
+          ],
+          "board_index": 2,
+          "row": 0,
+          "col": 2
+        },
+        {
+          "paper_id": "p30",
+          "title": "Graph Database Query Optimization via Worst-Case Optimal Joins",
+          "authors": [
+            "Frank Zhao",
+            "David Wang"
+          ],
+          "board_index": 3,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "paper_id": "p04",
+          "title": "Cardinality Estimation with Graph Neural Networks",
+          "authors": [
+            "Bob Zhang",
+            "Frank Zhao"
+          ],
+          "board_index": 4,
+          "row": 0,
+          "col": 4
+        },
+        {
+          "paper_id": "p20",
+          "title": "Text-to-SQL with Chain-of-Thought Prompting",
+          "authors": [
+            "Uma Sharma",
+            "Victor Gao"
+          ],
+          "board_index": 5,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "paper_id": "p24",
+          "title": "Self-Debugging SQL with LLM Feedback Loops",
+          "authors": [
+            "Wendy Zhou",
+            "Alice Chen"
+          ],
+          "board_index": 6,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "paper_id": "p23",
+          "title": "Retrieval-Augmented Generation for Database Documentation",
+          "authors": [
+            "Victor Gao",
+            "Zach Ye"
+          ],
+          "board_index": 7,
+          "row": 0,
+          "col": 7
+        }
+      ]
+    },
+    {
+      "session_id": "PS006",
+      "name": "New Session 4",
+      "description": "Formed during session count adjustment",
+      "time_slot": 0,
+      "area": 1,
+      "floor_plan": "line",
+      "boards": [
+        {
+          "paper_id": "p26",
+          "title": "Streaming Graph Partitioning for Distributed Analytics",
+          "authors": [
+            "Zach Ye",
+            "Alice Chen"
+          ],
+          "board_index": 0,
+          "row": 0,
+          "col": 0
+        },
+        {
+          "paper_id": "p26",
+          "title": "Streaming Graph Partitioning for Distributed Analytics",
+          "authors": [
+            "Zach Ye",
+            "Alice Chen"
+          ],
+          "board_index": 1,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "paper_id": "p29",
+          "title": "Distributed Triangle Counting in Trillion-Edge Graphs",
+          "authors": [
+            "Jack Ma",
+            "Eve Liu"
+          ],
+          "board_index": 2,
+          "row": 0,
+          "col": 2
+        },
+        {
+          "paper_id": "p29",
+          "title": "Distributed Triangle Counting in Trillion-Edge Graphs",
+          "authors": [
+            "Jack Ma",
+            "Eve Liu"
+          ],
+          "board_index": 3,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "paper_id": "p22",
+          "title": "Natural Language Interfaces for Knowledge Graphs",
+          "authors": [
+            "Xavier Qin",
+            "Yara Osman"
+          ],
+          "board_index": 4,
+          "row": 0,
+          "col": 4
+        },
+        {
+          "paper_id": "p25",
+          "title": "Benchmarking LLMs on Complex Analytical SQL Queries",
+          "authors": [
+            "Xavier Qin",
+            "Bob Zhang"
+          ],
+          "board_index": 5,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "paper_id": "p07",
+          "title": "GPU-Accelerated Vector Search for Billion-Scale Datasets",
+          "authors": [
+            "Grace Wu",
+            "Ivan Patel"
+          ],
+          "board_index": 6,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "paper_id": "p11",
+          "title": "Disaggregated Memory Transactions in Cloud-Native Databases",
+          "authors": [
+            "Leo Park",
+            "Nina Huang"
+          ],
+          "board_index": 7,
+          "row": 0,
+          "col": 7
+        }
+      ]
+    },
+    {
+      "session_id": "PS004",
+      "name": "New Session 2",
+      "description": "Formed during session count adjustment",
+      "time_slot": 1,
+      "area": 0,
+      "floor_plan": "line",
+      "boards": [
+        {
+          "paper_id": "p14",
+          "title": "Persistent Memory Transactions with Hardware Log Offloading",
+          "authors": [
+            "Oscar Tan",
+            "Quincy Ng"
+          ],
+          "board_index": 0,
+          "row": 0,
+          "col": 0
+        },
+        {
+          "paper_id": "p14",
+          "title": "Persistent Memory Transactions with Hardware Log Offloading",
+          "authors": [
+            "Oscar Tan",
+            "Quincy Ng"
+          ],
+          "board_index": 1,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "paper_id": "p11",
+          "title": "Disaggregated Memory Transactions in Cloud-Native Databases",
+          "authors": [
+            "Leo Park",
+            "Nina Huang"
+          ],
+          "board_index": 2,
+          "row": 0,
+          "col": 2
+        },
+        {
+          "paper_id": "p09",
+          "title": "Product Quantization Revisited: Residual Codebooks for Dense Retrieval",
+          "authors": [
+            "Henry Xu",
+            "Leo Park"
+          ],
+          "board_index": 3,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "paper_id": "p09",
+          "title": "Product Quantization Revisited: Residual Codebooks for Dense Retrieval",
+          "authors": [
+            "Henry Xu",
+            "Leo Park"
+          ],
+          "board_index": 4,
+          "row": 0,
+          "col": 4
+        },
+        {
+          "paper_id": "p18",
+          "title": "Holistic Data Profiling for Automated Data Discovery",
+          "authors": [
+            "Sam Lee",
+            "Uma Sharma"
+          ],
+          "board_index": 5,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "paper_id": "p17",
+          "title": "Integrable Set Discovery in Data Lakes",
+          "authors": [
+            "Rachel Kim",
+            "Tom Jiang"
+          ],
+          "board_index": 6,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "paper_id": "p21",
+          "title": "LLM-Augmented Data Cleaning Pipelines",
+          "authors": [
+            "Uma Sharma",
+            "Wendy Zhou"
+          ],
+          "board_index": 7,
+          "row": 0,
+          "col": 7
+        }
+      ]
+    },
+    {
+      "session_id": "PS005",
+      "name": "New Session 3",
+      "description": "Formed during session count adjustment",
+      "time_slot": 1,
+      "area": 1,
+      "floor_plan": "line",
+      "boards": [
+        {
+          "paper_id": "p10",
+          "title": "Deterministic Concurrency Control for Multi-Core OLTP",
+          "authors": [
+            "Leo Park",
+            "Mia Chen"
+          ],
+          "board_index": 0,
+          "row": 0,
+          "col": 0
+        },
+        {
+          "paper_id": "p10",
+          "title": "Deterministic Concurrency Control for Multi-Core OLTP",
+          "authors": [
+            "Leo Park",
+            "Mia Chen"
+          ],
+          "board_index": 1,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "paper_id": "p12",
+          "title": "Hybrid OLTP/OLAP on Modern Hardware: An HTAP Perspective",
+          "authors": [
+            "Oscar Tan",
+            "Mia Chen"
+          ],
+          "board_index": 2,
+          "row": 0,
+          "col": 2
+        },
+        {
+          "paper_id": "p08",
+          "title": "Filtered Vector Search: Combining Metadata Predicates with ANN",
+          "authors": [
+            "Jack Ma",
+            "Kelly Sun"
+          ],
+          "board_index": 3,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "paper_id": "p06",
+          "title": "High-Dimensional ANN Search with Learned Hashing",
+          "authors": [
+            "Grace Wu",
+            "Henry Xu"
+          ],
+          "board_index": 4,
+          "row": 0,
+          "col": 4
+        },
+        {
+          "paper_id": "p19",
+          "title": "Federated Table Search Across Organizational Boundaries",
+          "authors": [
+            "Tom Jiang",
+            "Victor Gao"
+          ],
+          "board_index": 5,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "paper_id": "p13",
+          "title": "Epoch-Based Isolation for Serializable Multi-Version Concurrency",
+          "authors": [
+            "Nina Huang",
+            "Pat Reeves"
+          ],
+          "board_index": 6,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "paper_id": "p13",
+          "title": "Epoch-Based Isolation for Serializable Multi-Version Concurrency",
+          "authors": [
+            "Nina Huang",
+            "Pat Reeves"
+          ],
+          "board_index": 7,
+          "row": 0,
+          "col": 7
+        }
+      ]
+    },
+    {
+      "session_id": "PS002",
+      "name": "Miscellaneous Topics",
+      "description": "Papers spanning diverse topics",
+      "time_slot": 2,
+      "area": 0,
+      "floor_plan": "line",
+      "boards": [
+        {
+          "paper_id": "p03",
+          "title": "Adaptive Query Re-Optimization Using Runtime Feedback",
+          "authors": [
+            "David Wang",
+            "Eve Liu"
+          ],
+          "board_index": 0,
+          "row": 0,
+          "col": 0
+        },
+        {
+          "paper_id": "p05",
+          "title": "Parametric Query Optimization via Workload Embeddings",
+          "authors": [
+            "Carol Li",
+            "Grace Wu"
+          ],
+          "board_index": 1,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "paper_id": "p01",
+          "title": "Learned Cost Models for Query Optimization",
+          "authors": [
+            "Alice Chen",
+            "Bob Zhang"
+          ],
+          "board_index": 2,
+          "row": 0,
+          "col": 2
+        },
+        {
+          "paper_id": "p30",
+          "title": "Graph Database Query Optimization via Worst-Case Optimal Joins",
+          "authors": [
+            "Frank Zhao",
+            "David Wang"
+          ],
+          "board_index": 3,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "paper_id": "p04",
+          "title": "Cardinality Estimation with Graph Neural Networks",
+          "authors": [
+            "Bob Zhang",
+            "Frank Zhao"
+          ],
+          "board_index": 4,
+          "row": 0,
+          "col": 4
+        },
+        {
+          "paper_id": "p22",
+          "title": "Natural Language Interfaces for Knowledge Graphs",
+          "authors": [
+            "Xavier Qin",
+            "Yara Osman"
+          ],
+          "board_index": 5,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "paper_id": "p25",
+          "title": "Benchmarking LLMs on Complex Analytical SQL Queries",
+          "authors": [
+            "Xavier Qin",
+            "Bob Zhang"
+          ],
+          "board_index": 6,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "paper_id": "p20",
+          "title": "Text-to-SQL with Chain-of-Thought Prompting",
+          "authors": [
+            "Uma Sharma",
+            "Victor Gao"
+          ],
+          "board_index": 7,
+          "row": 0,
+          "col": 7
+        },
+        {
+          "paper_id": "p24",
+          "title": "Self-Debugging SQL with LLM Feedback Loops",
+          "authors": [
+            "Wendy Zhou",
+            "Alice Chen"
+          ],
+          "board_index": 8,
+          "row": 0,
+          "col": 8
+        },
+        {
+          "paper_id": "p21",
+          "title": "LLM-Augmented Data Cleaning Pipelines",
+          "authors": [
+            "Uma Sharma",
+            "Wendy Zhou"
+          ],
+          "board_index": 9,
+          "row": 0,
+          "col": 9
+        },
+        {
+          "paper_id": "p16",
+          "title": "Entity Resolution via Contrastive Learning",
+          "authors": [
+            "Rachel Kim",
+            "Sam Lee"
+          ],
+          "board_index": 10,
+          "row": 0,
+          "col": 10
+        },
+        {
+          "paper_id": "p19",
+          "title": "Federated Table Search Across Organizational Boundaries",
+          "authors": [
+            "Tom Jiang",
+            "Victor Gao"
+          ],
+          "board_index": 11,
+          "row": 0,
+          "col": 11
+        },
+        {
+          "paper_id": "p06",
+          "title": "High-Dimensional ANN Search with Learned Hashing",
+          "authors": [
+            "Grace Wu",
+            "Henry Xu"
+          ],
+          "board_index": 12,
+          "row": 0,
+          "col": 12
+        },
+        {
+          "paper_id": "p08",
+          "title": "Filtered Vector Search: Combining Metadata Predicates with ANN",
+          "authors": [
+            "Jack Ma",
+            "Kelly Sun"
+          ],
+          "board_index": 13,
+          "row": 0,
+          "col": 13
+        },
+        {
+          "paper_id": "p07",
+          "title": "GPU-Accelerated Vector Search for Billion-Scale Datasets",
+          "authors": [
+            "Grace Wu",
+            "Ivan Patel"
+          ],
+          "board_index": 14,
+          "row": 0,
+          "col": 14
+        },
+        {
+          "paper_id": "p12",
+          "title": "Hybrid OLTP/OLAP on Modern Hardware: An HTAP Perspective",
+          "authors": [
+            "Oscar Tan",
+            "Mia Chen"
+          ],
+          "board_index": 15,
+          "row": 0,
+          "col": 15
+        },
+        {
+          "paper_id": "p18",
+          "title": "Holistic Data Profiling for Automated Data Discovery",
+          "authors": [
+            "Sam Lee",
+            "Uma Sharma"
+          ],
+          "board_index": 16,
+          "row": 0,
+          "col": 16
+        },
+        {
+          "paper_id": "p17",
+          "title": "Integrable Set Discovery in Data Lakes",
+          "authors": [
+            "Rachel Kim",
+            "Tom Jiang"
+          ],
+          "board_index": 17,
+          "row": 0,
+          "col": 17
+        },
+        {
+          "paper_id": "p15",
+          "title": "Schema Matching at Scale with Pre-Trained Language Models",
+          "authors": [
+            "David Wang",
+            "Quincy Ng"
+          ],
+          "board_index": 18,
+          "row": 0,
+          "col": 18
+        },
+        {
+          "paper_id": "p23",
+          "title": "Retrieval-Augmented Generation for Database Documentation",
+          "authors": [
+            "Victor Gao",
+            "Zach Ye"
+          ],
+          "board_index": 19,
+          "row": 0,
+          "col": 19
+        }
+      ]
+    },
+    {
+      "session_id": "PS003",
+      "name": "New Session 1",
+      "description": "Formed during session count adjustment",
+      "time_slot": 2,
+      "area": 1,
+      "floor_plan": "line",
+      "boards": [
+        {
+          "paper_id": "p28",
+          "title": "Subgraph Matching on Property Graphs with Attributed Edges",
+          "authors": [
+            "Frank Zhao",
+            "Kelly Sun"
+          ],
+          "board_index": 0,
+          "row": 0,
+          "col": 0
+        },
+        {
+          "paper_id": "p28",
+          "title": "Subgraph Matching on Property Graphs with Attributed Edges",
+          "authors": [
+            "Frank Zhao",
+            "Kelly Sun"
+          ],
+          "board_index": 1,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "paper_id": "p27",
+          "title": "Temporal Graph Neural Networks for Dynamic Relationship Prediction",
+          "authors": [
+            "Zach Ye",
+            "Bob Zhang"
+          ],
+          "board_index": 2,
+          "row": 0,
+          "col": 2
+        },
+        {
+          "paper_id": "p27",
+          "title": "Temporal Graph Neural Networks for Dynamic Relationship Prediction",
+          "authors": [
+            "Zach Ye",
+            "Bob Zhang"
+          ],
+          "board_index": 3,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "paper_id": "p02",
+          "title": "Reinforcement Learning for Join Order Selection",
+          "authors": [
+            "Alice Chen",
+            "Carol Li"
+          ],
+          "board_index": 4,
+          "row": 0,
+          "col": 4
+        },
+        {
+          "paper_id": "p02",
+          "title": "Reinforcement Learning for Join Order Selection",
+          "authors": [
+            "Alice Chen",
+            "Carol Li"
+          ],
+          "board_index": 5,
+          "row": 0,
+          "col": 5
+        },
+        {
+          "paper_id": "p16",
+          "title": "Entity Resolution via Contrastive Learning",
+          "authors": [
+            "Rachel Kim",
+            "Sam Lee"
+          ],
+          "board_index": 6,
+          "row": 0,
+          "col": 6
+        },
+        {
+          "paper_id": "p15",
+          "title": "Schema Matching at Scale with Pre-Trained Language Models",
+          "authors": [
+            "David Wang",
+            "Quincy Ng"
+          ],
+          "board_index": 7,
+          "row": 0,
+          "col": 7
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_papers": 60,
+    "total_sessions": 6,
+    "time_slots_used": 3,
+    "floor_plan": "line"
+  }
+}

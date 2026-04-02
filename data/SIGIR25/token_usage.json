@@ -1,0 +1,22 @@
+{
+  "workspace": "SIGIR25",
+  "total_calls": 83,
+  "total_prompt_tokens": 67216,
+  "total_completion_tokens": 14826,
+  "total_tokens": 82042,
+  "total_cost_usd": 0.3163,
+  "runs": [
+    {
+      "run_id": "oral_20260402T115805",
+      "mode": "oral",
+      "timestamp": "2026-04-02T11:58:05.225621+00:00",
+      "calls": 83,
+      "prompt_tokens": 67216,
+      "completion_tokens": 14826,
+      "total_tokens": 82042,
+      "cost_usd": 0.3163,
+      "provider": "openai",
+      "model": "gpt-4o"
+    }
+  ]
+}
