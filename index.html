@@ -3224,6 +3224,19 @@
         state.oral.demoInfo = requireApiResult(resp, "Oral info");
         state.oral.availableConferences = state.oral.demoInfo.availableConferences || [];
         state.oral.conference = state.oral.demoInfo.conference || state.oral.conference;
+
+        /* Apply suggested capacity params from backend */
+        const sp = state.oral.demoInfo.suggested_params;
+        if (sp) {
+          state.oral.parallelSessions = sp.parallel_sessions;
+          state.oral.timeSlots = sp.time_slots;
+          state.oral.maxPerSession = sp.max_per_session;
+          state.oral.minPerSession = sp.min_per_session;
+          document.getElementById("oralParallelInput").value = sp.parallel_sessions;
+          document.getElementById("oralSlotsInput").value = sp.time_slots;
+          document.getElementById("oralMaxInput").value = sp.max_per_session;
+          document.getElementById("oralMinInput").value = sp.min_per_session;
+        }
       } catch (err) {
         state.oral.demoInfo = { error: err.message };
       }
@@ -4602,6 +4615,19 @@
         state.poster.demoInfo = requireApiResult(resp, "Poster info");
         state.poster.availableConferences = state.poster.demoInfo.availableConferences || [];
         state.poster.conference = state.poster.demoInfo.conference || state.poster.conference;
+
+        /* Apply suggested capacity params from backend */
+        const sp = state.poster.demoInfo.suggested_params;
+        if (sp) {
+          state.poster.sessionCount = sp.session_count;
+          state.poster.rows = sp.rows;
+          state.poster.cols = sp.cols;
+          state.poster.boardCount = sp.board_count;
+          document.getElementById("posterSessionCountInput").value = sp.session_count;
+          document.getElementById("posterRowsInput").value = sp.rows;
+          document.getElementById("posterColsInput").value = sp.cols;
+          document.getElementById("posterBoardCountInput").value = sp.board_count;
+        }
       } catch (err) {
         state.poster.demoInfo = { error: err.message };
       }

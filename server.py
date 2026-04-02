@@ -296,6 +296,60 @@ STATIC_EXTENSIONS = {".css", ".js", ".png", ".jpg", ".svg", ".ico", ".woff", ".w
 
 
 # ════════════════════════════════════════════════════════════════════
+# Suggested capacity defaults from paper count
+# ════════════════════════════════════════════════════════════════════
+
+import math
+
+
+def compute_oral_defaults(paper_count: int) -> dict:
+    """Compute sensible oral session parameters from the number of papers."""
+    if paper_count <= 0:
+        return {"parallel_sessions": 1, "time_slots": 1,
+                "max_per_session": 5, "min_per_session": 3}
+
+    min_ps, max_ps = 3, 5
+    avg_ps = (min_ps + max_ps) / 2  # 4
+    total_sessions = math.ceil(paper_count / avg_ps)
+
+    # Choose parallel tracks (M): scale with sqrt of sessions, clamp 2-8
+    M = min(8, max(2, round(math.sqrt(total_sessions))))
+    # Derive time slots (N)
+    N = math.ceil(total_sessions / M)
+
+    # Ensure capacity bounds are valid: M*N*min <= paper_count <= M*N*max
+    # If too tight, widen by bumping N
+    while M * N * min_ps > paper_count and N > 1:
+        N -= 1
+    while M * N * max_ps < paper_count:
+        N += 1
+
+    return {
+        "parallel_sessions": M,
+        "time_slots": N,
+        "max_per_session": max_ps,
+        "min_per_session": min_ps,
+    }
+
+
+def compute_poster_defaults(paper_count: int) -> dict:
+    """Compute sensible poster session parameters from the number of papers."""
+    if paper_count <= 0:
+        return {"session_count": 1, "rows": 3, "cols": 4, "board_count": 12}
+
+    rows, cols = 3, 4
+    board_count = rows * cols  # 12 boards per session
+    session_count = math.ceil(paper_count / board_count)
+
+    return {
+        "session_count": session_count,
+        "rows": rows,
+        "cols": cols,
+        "board_count": board_count,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
 # API: Oral Session Organization
 # ════════════════════════════════════════════════════════════════════
 
@@ -309,6 +363,7 @@ async def oral_info(conference: str = Query("SIGIR25")):
 
         papers = get_papers(conf)
         stats = get_presenter_stats(papers)
+        suggested = compute_oral_defaults(len(papers))
 
         return {
             "result": {
@@ -320,6 +375,7 @@ async def oral_info(conference: str = Query("SIGIR25")):
                 "maxPapersPerPresenter": stats["maxPapersPerPresenter"],
                 "paperDataPath": f"data/{conf}/",
                 "similarityMatrixPath": f".cache/embeddings/ (auto-computed)",
+                "suggested_params": suggested,
             }
         }
     except Exception as e:
@@ -458,6 +514,7 @@ async def poster_info(conference: str = Query("SIGIR25")):
 
         papers = get_papers(conf)
         stats = get_presenter_stats(papers)
+        suggested = compute_poster_defaults(len(papers))
 
         return {
             "result": {
@@ -469,6 +526,7 @@ async def poster_info(conference: str = Query("SIGIR25")):
                 "maxPapersPerPresenter": stats["maxPapersPerPresenter"],
                 "paperDataPath": f"data/{conf}/",
                 "similarityMatrixPath": f".cache/embeddings/ (auto-computed)",
+                "suggested_params": suggested,
             }
         }
     except Exception as e:
