@@ -32,6 +32,7 @@ import {
   exportSummaryChip,
   exportMetaCard,
 } from "../export-template.js";
+import { collapseSetupPanel, updateSetupSummary } from "../router.js";
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
 
@@ -269,6 +270,12 @@ export async function runOralOrganization() {
     state.oral.result = prepareOralResult(requireApiResult(resp, "Oral organization"));
     state.oral.activeSessionId = null;
     state.oral.activeHardPaperId = null;
+    /* Auto-collapse setup panel and show summary */
+    const r = state.oral.result;
+    const sessionCount = r.sessions ? r.sessions.length : 0;
+    const paperCount = r.sessions ? r.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0) : 0;
+    updateSetupSummary("oralSummaryChip", `${sessionCount} sessions, ${paperCount} papers, M=${state.oral.parallelSessions} N=${state.oral.timeSlots}`);
+    collapseSetupPanel("oralSetupPanel");
   } catch (err) {
     alert(`Oral organization backend error: ${err.message}`);
   } finally {

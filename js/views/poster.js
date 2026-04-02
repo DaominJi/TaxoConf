@@ -33,6 +33,7 @@ import {
   exportSummaryChip,
   exportMetaCard,
 } from "../export-template.js";
+import { collapseSetupPanel, updateSetupSummary } from "../router.js";
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
 
@@ -444,6 +445,12 @@ export async function runPosterOrganization() {
     state.poster.optimizeWithinLayout = Boolean(state.poster.result && state.poster.result.optimizeWithinLayout);
     state.poster.activeSessionId = null;
     state.poster.activeHardPaperId = null;
+    /* Auto-collapse setup panel and show summary */
+    const r = state.poster.result;
+    const sessionCount = r.sessions ? r.sessions.length : 0;
+    const paperCount = r.sessions ? r.sessions.reduce((s, sess) => s + (sess.assignments ? sess.assignments.length : 0), 0) : 0;
+    updateSetupSummary("posterSummaryChip", `${sessionCount} sessions, ${paperCount} papers, ${state.poster.layoutType} layout`);
+    collapseSetupPanel("posterSetupPanel");
   } catch (err) {
     alert(`Poster organization backend error: ${err.message}`);
   } finally {

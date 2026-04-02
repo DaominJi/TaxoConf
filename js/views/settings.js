@@ -254,4 +254,9 @@ export function setupSettingsEvents() {
   });
   document.getElementById("settingsSaveBtn").addEventListener("click", saveSettings);
   document.getElementById("settingsTestLLMBtn").addEventListener("click", testLLMConnection);
+
+  /* Load settings when tab is activated */
+  import("../router.js").then(({ onTaskEnter }) => {
+    onTaskEnter("settings", loadSettings);
+  });
 }

@@ -19,6 +19,111 @@
   letter-spacing: -0.01em;
 }
 
+/* ── Sticky task toolbar ─────────────────────── */
+
+.task-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  margin: -14px -14px 14px;
+  flex-wrap: wrap;
+}
+
+.task-toolbar .toolbar-title {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  flex: 1;
+  min-width: 120px;
+}
+
+.task-toolbar .toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.task-toolbar .toolbar-status {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.btn-configure {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f3faf8;
+  color: var(--ink-soft);
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-configure:hover { background: #e6f2ee; color: var(--ink); }
+.btn-configure .caret {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 0.7rem;
+}
+.btn-configure.is-collapsed .caret { transform: rotate(-90deg); }
+
+/* ── Collapsible setup panel ─────────────────── */
+
+.setup-body {
+  transition: max-height 0.3s ease, opacity 0.2s ease, padding 0.3s ease;
+  overflow: hidden;
+}
+
+.setup-panel.is-collapsed .setup-body {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.setup-panel.is-collapsed {
+  padding-bottom: 0;
+}
+
+/* ── Summary bar (visible when collapsed) ────── */
+
+.setup-summary-bar {
+  display: none;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  padding: 4px 0;
+}
+
+.setup-summary-bar .summary-chip {
+  background: #f0f6f4;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.setup-panel.is-collapsed .setup-summary-bar {
+  display: flex;
+}
+
 .panel-toolbar {
   display: flex;
   justify-content: space-between;

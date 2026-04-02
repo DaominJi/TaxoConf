@@ -314,67 +314,76 @@
       </section>
 
       <section class="task-view" id="task-oral">
-        <section class="panel setup-panel">
-          <h2>Setup Panel: Oral Session Organization</h2>
-          <div class="grid-3">
-            <div class="control-card">
-              <h3 style="margin:0 0 8px;font-size:0.9rem">Server-Side Demo Data</h3>
-              <div class="control-group">
-                <span class="control-label">Conference Demo Data</span>
-                <select id="oralConferenceSelect"></select>
-              </div>
-              <div id="oralSourceStatus" class="tiny">Loading server-side presentation data...</div>
+        <section class="panel setup-panel" id="oralSetupPanel">
+          <div class="task-toolbar">
+            <h2 class="toolbar-title">Oral Session Organization</h2>
+            <div class="toolbar-actions">
+              <select id="oralConferenceSelect" title="Conference"></select>
+              <button id="runOralBtn" class="btn-primary" type="button">Run</button>
+              <button id="exportOralBtn" class="btn-muted" type="button">Export</button>
+              <button class="btn-configure" type="button" data-toggle-setup="oralSetupPanel">Configure <span class="caret">&#9660;</span></button>
             </div>
+            <div id="oralRunStatus" class="run-status toolbar-status" aria-live="polite"></div>
+          </div>
 
-            <div class="control-card">
-              <div class="control-group">
-                <span class="control-label">Parallel Sessions (M)</span>
-                <input id="oralParallelInput" type="number" min="1" step="1" value="7">
-              </div>
-              <div class="control-group">
-                <span class="control-label">Time Slots (N)</span>
-                <input id="oralSlotsInput" type="number" min="1" step="1" value="19">
-              </div>
-              <div class="control-group">
-                <span class="control-label">Maximum Presentations per Session (Max)</span>
-                <input id="oralMaxInput" type="number" min="1" step="1" value="4">
-              </div>
-              <div class="control-group">
-                <span class="control-label">Minimum Presentations per Session (Min)</span>
-                <input id="oralMinInput" type="number" min="1" step="1" value="3">
-              </div>
-              <div class="btn-row">
-                <button id="runOralBtn" class="btn-primary" type="button">Run Oral Organization</button>
-              </div>
-              <div id="oralRunStatus" class="run-status" aria-live="polite"></div>
-            </div>
+          <!-- Summary bar: visible when collapsed -->
+          <div id="oralSetupSummary" class="setup-summary-bar">
+            <span class="summary-chip" id="oralSummaryChip">Loading...</span>
+          </div>
 
-            <div class="control-card">
-              <div id="oralCapacityNotice" class="capacity-note">Checking capacity against the demo paper set...</div>
-              <div class="control-group" style="margin-top:10px">
-                <span class="control-label">Schedule View</span>
-                <select id="oralViewModeSelect">
-                  <option value="concise">Concise</option>
-                  <option value="detailed">Detailed</option>
-                </select>
+          <!-- Collapsible setup body -->
+          <div class="setup-body">
+            <div id="oralSourceStatus" class="tiny" style="margin-bottom:10px">Loading server-side presentation data...</div>
+            <div class="grid-3">
+              <div class="control-card">
+                <h3 style="margin:0 0 8px;font-size:0.9rem">Session Parameters</h3>
+                <div class="control-group">
+                  <span class="control-label">Parallel Sessions (M)</span>
+                  <input id="oralParallelInput" type="number" min="1" step="1" value="7">
+                </div>
+                <div class="control-group">
+                  <span class="control-label">Time Slots (N)</span>
+                  <input id="oralSlotsInput" type="number" min="1" step="1" value="19">
+                </div>
+                <div class="control-group">
+                  <span class="control-label">Max per Session</span>
+                  <input id="oralMaxInput" type="number" min="1" step="1" value="4">
+                </div>
+                <div class="control-group">
+                  <span class="control-label">Min per Session</span>
+                  <input id="oralMinInput" type="number" min="1" step="1" value="3">
+                </div>
               </div>
-              <div class="control-group">
-                <span class="control-label">Export Format</span>
-                <select id="oralExportFormatSelect">
-                  <option value="html">HTML</option>
-                  <option value="csv">CSV</option>
-                </select>
+
+              <div class="control-card">
+                <h3 style="margin:0 0 8px;font-size:0.9rem">Capacity Check</h3>
+                <div id="oralCapacityNotice" class="capacity-note">Checking capacity against the demo paper set...</div>
               </div>
-              <div class="btn-row">
-                <button id="exportOralBtn" class="btn-muted" type="button">Export Schedule</button>
+
+              <div class="control-card">
+                <h3 style="margin:0 0 8px;font-size:0.9rem">View &amp; Export</h3>
+                <div class="control-group">
+                  <span class="control-label">Schedule View</span>
+                  <select id="oralViewModeSelect">
+                    <option value="concise">Concise</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </div>
+                <div class="control-group">
+                  <span class="control-label">Export Format</span>
+                  <select id="oralExportFormatSelect">
+                    <option value="html">HTML</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </div>
+                <div class="tiny" style="margin-top:8px">Click a session cell after the run to inspect and edit.</div>
               </div>
-              <div class="tiny" style="margin-top:8px">Session names are generated automatically during organization. Click a session cell after the run to inspect presentations, edit session metadata, and move papers between sessions.</div>
             </div>
           </div>
         </section>
 
         <section class="panel result-panel">
-          <h2>Main Panel: Oral Schedule Result</h2>
+          <h2>Oral Schedule Result</h2>
           <div id="oralSummary" class="summary"></div>
           <div id="oralSchedulePanel" class="schedule-table"></div>
           <div class="detail-card" id="oralEditorPanel"></div>
@@ -383,90 +392,96 @@
       </section>
 
       <section class="task-view" id="task-poster">
-        <section class="panel setup-panel">
-          <h2>Setup Panel: Poster Session Organization</h2>
-          <div class="grid-3">
-            <div class="control-card">
-              <h3 style="margin:0 0 8px;font-size:0.9rem">Server-Side Demo Data</h3>
-              <div class="control-group">
-                <span class="control-label">Conference Demo Data</span>
-                <select id="posterConferenceSelect"></select>
-              </div>
-              <div id="posterSourceStatus" class="tiny">Loading server-side presentation data...</div>
+        <section class="panel setup-panel" id="posterSetupPanel">
+          <div class="task-toolbar">
+            <h2 class="toolbar-title">Poster Session Organization</h2>
+            <div class="toolbar-actions">
+              <select id="posterConferenceSelect" title="Conference"></select>
+              <button id="runPosterBtn" class="btn-primary" type="button">Run</button>
+              <button id="exportPosterBtn" class="btn-muted" type="button">Export</button>
+              <button class="btn-configure" type="button" data-toggle-setup="posterSetupPanel">Configure <span class="caret">&#9660;</span></button>
             </div>
+            <div id="posterRunStatus" class="run-status toolbar-status" aria-live="polite"></div>
+          </div>
 
-            <div class="control-card">
-              <label class="checkbox-line">
-                <input id="posterWithinFloorplanInput" type="checkbox" checked>
-                Consider similarity within a floor plan
-              </label>
-              <div class="control-group">
-                <span class="control-label">Floor Plan Category</span>
-                <select id="posterLayoutCategorySelect">
-                  <option value="rectangle">Rectangle</option>
-                  <option value="line_circle">Line / Circle</option>
-                </select>
-              </div>
-              <div id="posterLineCircleControls" class="is-hidden">
+          <!-- Summary bar: visible when collapsed -->
+          <div id="posterSetupSummary" class="setup-summary-bar">
+            <span class="summary-chip" id="posterSummaryChip">Loading...</span>
+          </div>
+
+          <!-- Collapsible setup body -->
+          <div class="setup-body">
+            <div id="posterSourceStatus" class="tiny" style="margin-bottom:10px">Loading server-side presentation data...</div>
+            <div class="grid-3">
+              <div class="control-card">
+                <h3 style="margin:0 0 8px;font-size:0.9rem">Floor Plan Layout</h3>
+                <label class="checkbox-line">
+                  <input id="posterWithinFloorplanInput" type="checkbox" checked>
+                  Consider similarity within a floor plan
+                </label>
                 <div class="control-group">
-                  <span class="control-label">Specific Floor Plan</span>
-                  <select id="posterLinearLayoutSelect">
-                    <option value="line">Line</option>
-                    <option value="circle">Circle</option>
+                  <span class="control-label">Floor Plan Category</span>
+                  <select id="posterLayoutCategorySelect">
+                    <option value="rectangle">Rectangle</option>
+                    <option value="line_circle">Line / Circle</option>
+                  </select>
+                </div>
+                <div id="posterLineCircleControls" class="is-hidden">
+                  <div class="control-group">
+                    <span class="control-label">Specific Floor Plan</span>
+                    <select id="posterLinearLayoutSelect">
+                      <option value="line">Line</option>
+                      <option value="circle">Circle</option>
+                    </select>
+                  </div>
+                  <div class="control-group">
+                    <span class="control-label">Board Count</span>
+                    <input id="posterBoardCountInput" type="number" min="1" step="1" value="12">
+                  </div>
+                </div>
+                <div id="posterRectangleControls">
+                  <div class="control-group">
+                    <span class="control-label">Rectangle Rows</span>
+                    <input id="posterRowsInput" type="number" min="1" step="1" value="3">
+                  </div>
+                  <div class="control-group">
+                    <span class="control-label">Rectangle Columns</span>
+                    <input id="posterColsInput" type="number" min="1" step="1" value="4">
+                  </div>
+                </div>
+              </div>
+
+              <div class="control-card">
+                <h3 style="margin:0 0 8px;font-size:0.9rem">Session Parameters</h3>
+                <div class="control-group">
+                  <span class="control-label">Session Count</span>
+                  <input id="posterSessionCountInput" type="number" min="1" step="1" value="44">
+                </div>
+                <label class="checkbox-line">
+                  <input id="posterPresenterConflictInput" type="checkbox">
+                  Prevent same presenter in same session
+                </label>
+                <div id="posterCapacityNotice" class="capacity-note" style="margin-top:8px">Checking capacity...</div>
+              </div>
+
+              <div class="control-card">
+                <h3 style="margin:0 0 8px;font-size:0.9rem">View &amp; Export</h3>
+                <div class="control-group">
+                  <span class="control-label">Schedule View</span>
+                  <select id="posterViewModeSelect">
+                    <option value="concise">Concise</option>
+                    <option value="detailed">Detailed</option>
                   </select>
                 </div>
                 <div class="control-group">
-                  <span class="control-label">Board Count</span>
-                  <input id="posterBoardCountInput" type="number" min="1" step="1" value="12">
+                  <span class="control-label">Export Format</span>
+                  <select id="posterExportFormatSelect">
+                    <option value="html">HTML</option>
+                    <option value="csv">CSV</option>
+                  </select>
                 </div>
+                <div class="tiny" style="margin-top:8px">Click any poster session card or board to inspect and edit.</div>
               </div>
-              <div id="posterRectangleControls">
-                <div class="control-group">
-                  <span class="control-label">Rectangle Rows</span>
-                  <input id="posterRowsInput" type="number" min="1" step="1" value="3">
-                </div>
-                <div class="control-group">
-                  <span class="control-label">Rectangle Columns</span>
-                  <input id="posterColsInput" type="number" min="1" step="1" value="4">
-                </div>
-              </div>
-              <div class="control-group">
-                <span class="control-label">Session Count</span>
-                <input id="posterSessionCountInput" type="number" min="1" step="1" value="44">
-              </div>
-              <label class="checkbox-line">
-                <input id="posterPresenterConflictInput" type="checkbox">
-                Prevent papers from the same presenter appearing in the same session
-              </label>
-              <div id="posterFloorplanDetailNote" class="tiny" style="margin-top:8px">
-                Floor-plan parameters are used for both visualization and within-session similarity optimization.
-              </div>
-              <div class="btn-row">
-                <button id="runPosterBtn" class="btn-primary" type="button">Run Poster Organization</button>
-              </div>
-              <div id="posterRunStatus" class="run-status" aria-live="polite"></div>
-            </div>
-
-            <div class="control-card">
-              <div id="posterCapacityNotice" class="capacity-note">Checking capacity against the demo paper set...</div>
-              <div class="control-group" style="margin-top:10px">
-                <span class="control-label">Schedule View</span>
-                <select id="posterViewModeSelect">
-                  <option value="concise">Concise</option>
-                  <option value="detailed">Detailed</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <span class="control-label">Export Format</span>
-                <select id="posterExportFormatSelect">
-                  <option value="html">HTML</option>
-                  <option value="csv">CSV</option>
-                </select>
-              </div>
-              <div class="btn-row">
-                <button id="exportPosterBtn" class="btn-muted" type="button">Export Schedule</button>
-              </div>
-              <div class="tiny" style="margin-top:8px">Session names are generated automatically during organization. Click any poster session card or board to inspect the session, edit session metadata, and move papers between sessions.</div>
             </div>
           </div>
         </section>
