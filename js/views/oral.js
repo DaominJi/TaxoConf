@@ -33,6 +33,81 @@ import {
   exportMetaCard,
 } from "../export-template.js";
 import { collapseSetupPanel, updateSetupSummary } from "../router.js";
+import { showToast } from "../toast.js";
+
+/* ═══════════════════ Save / restore progress ═══════════════════ */
+
+function localStorageKey() {
+  return `taxoconf_oral_progress_${state.oral.conference || "default"}`;
+}
+
+function autoSaveOralProgress() {
+  try {
+    const result = state.oral.result;
+    if (!result) return;
+    localStorage.setItem(localStorageKey(), JSON.stringify(result));
+  } catch (_) { /* localStorage full or unavailable */ }
+}
+
+function getLocalSavedProgress() {
+  try {
+    const raw = localStorage.getItem(localStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+function clearLocalSavedProgress() {
+  try { localStorage.removeItem(localStorageKey()); } catch (_) {}
+}
+
+/** Restore progress from localStorage into state and re-render. */
+function restoreLocalProgress() {
+  const saved = getLocalSavedProgress();
+  if (!saved) return false;
+  state.oral.result = saved;
+  renderOralResults();
+  return true;
+}
+
+/** Save progress to backend server. */
+export async function saveOralProgressToServer() {
+  const result = state.oral.result;
+  if (!result) { alert("No oral result to save."); return; }
+  try {
+    const resp = await apiPost("/oral/progress", {
+      conference: state.oral.conference,
+      result: result,
+    });
+    if (resp.success) {
+      showToast("Oral session progress saved to server.");
+    } else {
+      alert("Failed to save: " + (resp.error || "Unknown error"));
+    }
+  } catch (e) {
+    alert("Save failed: " + e.message);
+  }
+}
+
+/** Load progress from backend server. */
+export async function loadOralProgressFromServer() {
+  try {
+    const resp = await apiGet(`/oral/progress?conference=${encodeURIComponent(state.oral.conference)}`);
+    if (resp.success && resp.result) {
+      state.oral.result = resp.result;
+      autoSaveOralProgress(); /* sync to localStorage too */
+      renderOralResults();
+      showToast("Oral session progress loaded from server.");
+      return true;
+    }
+    if (!resp.success) {
+      showToast("No saved progress found on server.");
+    }
+    return false;
+  } catch (e) {
+    alert("Load failed: " + e.message);
+    return false;
+  }
+}
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
 
@@ -130,9 +205,52 @@ function setOralSessionFields(sessionId, fields) {
     endTime: String(fields.endTime || "").trim(),
     trackLabel: String(fields.trackLabel || "").trim(),
     location: String(fields.location || "").trim(),
-    speakers: String(fields.speakers || "").trim(),
-    description: String(fields.description || "").trim(),
   });
+
+  /* Propagate time/date changes to all parallel sessions in the same slot */
+  const timeFields = ["startTime", "endTime", "sessionDate"];
+  const hasTimeChange = timeFields.some((f) => fields[f] !== undefined);
+  if (hasTimeChange && session.slot != null) {
+    result.sessions.forEach((s) => {
+      if (s.slot === session.slot && s.id !== session.id) {
+        ensureSessionMetadata(s);
+        timeFields.forEach((f) => { s[f] = session[f]; });
+      }
+    });
+  }
+
+  /* Auto-save to localStorage */
+  autoSaveOralProgress();
+  renderOralResults();
+}
+
+/** Set time fields for all sessions in a given slot (called from inline grid editing). */
+function setSlotTimeFields(slot, fields) {
+  const result = state.oral.result;
+  if (!result) return;
+  result.sessions.forEach((s) => {
+    if (s.slot === slot) {
+      ensureSessionMetadata(s);
+      if (fields.startTime !== undefined) s.startTime = String(fields.startTime || "").trim();
+      if (fields.endTime !== undefined) s.endTime = String(fields.endTime || "").trim();
+      if (fields.sessionDate !== undefined) s.sessionDate = String(fields.sessionDate || "").trim();
+    }
+  });
+  autoSaveOralProgress();
+  renderOralResults();
+}
+
+/** Set location for all sessions in a given track. */
+function setTrackLocation(track, location) {
+  const result = state.oral.result;
+  if (!result) return;
+  result.sessions.forEach((s) => {
+    if (s.track === track) {
+      ensureSessionMetadata(s);
+      s.location = String(location || "").trim();
+    }
+  });
+  autoSaveOralProgress();
   renderOralResults();
 }
 
@@ -159,6 +277,30 @@ export async function loadOralDemoInfo() {
   } catch (err) {
     state.oral.demoInfo = { error: err.message };
   }
+
+  /* Check for saved progress in localStorage */
+  if (!state.oral.result) {
+    const saved = getLocalSavedProgress();
+    if (saved) {
+      const banner = document.getElementById("oralSourceStatus");
+      if (banner) {
+        banner.innerHTML += `<br><strong style="color:var(--accent-warm)">Unsaved session edits found.</strong>
+          <button class="btn-muted" style="padding:2px 8px;font-size:0.76rem;margin-left:6px" data-action="restore-oral-local">Restore</button>
+          <button class="btn-muted" style="padding:2px 8px;font-size:0.76rem;margin-left:4px" data-action="discard-oral-local">Discard</button>`;
+        banner.addEventListener("click", (e) => {
+          if (e.target.closest("[data-action='restore-oral-local']")) {
+            restoreLocalProgress();
+            showToast("Session edits restored from local storage.");
+          } else if (e.target.closest("[data-action='discard-oral-local']")) {
+            clearLocalSavedProgress();
+            showToast("Local saved progress discarded.");
+            renderOralCapacityNotice();
+          }
+        }, { once: true });
+      }
+    }
+  }
+
   renderOralCapacityNotice();
   renderOralResults();
 }
@@ -407,9 +549,9 @@ export function renderOralSessionModal() {
     </div>
     <div class="paper-move-card">
       <div><strong>Session Metadata</strong></div>
-      <div class="tiny" style="margin-top:4px">Edit the generated session title, scheduling fields, location, description, and speaker information used by the export.</div>
+      <div class="tiny" style="margin-top:4px">Edit the session title, chair, scheduling, and location. Time and date changes apply to all parallel sessions in the same slot.</div>
       <div class="modal-field-grid">
-        <div class="modal-field">
+        <div class="modal-field modal-field-span">
           <label>Session Name</label>
           <input data-oral-session-name-input="${session.id}" type="text" value="${escapeHtml(session.sessionName || "")}" placeholder="Concise academic session name">
         </div>
@@ -418,12 +560,12 @@ export function renderOralSessionModal() {
           <input data-oral-session-chair-input="${session.id}" type="text" value="${escapeHtml(session.sessionChair || "")}" placeholder="Leave blank or assign manually">
         </div>
         <div class="modal-field">
-          <label>Date</label>
-          <input data-oral-session-date-input="${session.id}" type="text" value="${escapeHtml(session.sessionDate || "")}" placeholder="e.g. 2025-07-17">
+          <label>Track Label</label>
+          <input data-oral-session-track-input="${session.id}" type="text" value="${escapeHtml(session.trackLabel || "")}" placeholder="Optional track label">
         </div>
         <div class="modal-field">
-          <label>Track</label>
-          <input data-oral-session-track-input="${session.id}" type="text" value="${escapeHtml(session.trackLabel || "")}" placeholder="Optional track label">
+          <label>Date</label>
+          <input data-oral-session-date-input="${session.id}" type="text" value="${escapeHtml(session.sessionDate || "")}" placeholder="e.g. 2025-07-17">
         </div>
         <div class="modal-field">
           <label>Start Time</label>
@@ -436,14 +578,6 @@ export function renderOralSessionModal() {
         <div class="modal-field">
           <label>Room / Location</label>
           <input data-oral-session-location-input="${session.id}" type="text" value="${escapeHtml(session.location || "")}" placeholder="Optional room or venue">
-        </div>
-        <div class="modal-field">
-          <label>Speakers</label>
-          <input data-oral-session-speakers-input="${session.id}" type="text" value="${escapeHtml(session.speakers || "")}" placeholder="Optional speakers">
-        </div>
-        <div class="modal-field modal-field-span">
-          <label>Description</label>
-          <textarea data-oral-session-description-input="${session.id}" rows="3" placeholder="Optional session description">${escapeHtml(session.description || "")}</textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -498,8 +632,6 @@ export function renderOralSessionModal() {
         startTime: body.querySelector(`input[data-oral-session-start-input="${sid}"]`)?.value || "",
         endTime: body.querySelector(`input[data-oral-session-end-input="${sid}"]`)?.value || "",
         location: body.querySelector(`input[data-oral-session-location-input="${sid}"]`)?.value || "",
-        speakers: body.querySelector(`input[data-oral-session-speakers-input="${sid}"]`)?.value || "",
-        description: body.querySelector(`textarea[data-oral-session-description-input="${sid}"]`)?.value || "",
       });
     }
   });
@@ -655,21 +787,49 @@ export function renderOralResults() {
   const T = state.oral.timeSlots;
   const K = state.oral.parallelSessions;
 
+  /* Collect current time/location from first session in each slot/track */
+  const slotTimes = {};
+  const trackLocations = {};
+  result.sessions.forEach((s) => {
+    ensureSessionMetadata(s);
+    if (s.slot && !slotTimes[s.slot]) {
+      slotTimes[s.slot] = { startTime: s.startTime, endTime: s.endTime, sessionDate: s.sessionDate };
+    }
+    if (s.track && !trackLocations[s.track]) {
+      trackLocations[s.track] = s.location;
+    }
+  });
+
   schedulePanel.innerHTML = `${loadingBanner}
     <div class="schedule-shell">
       <table>
         <thead>
           <tr>
             <th>Time Slot</th>
-            ${Array.from({ length: K }, (_, i) => `<th>Track ${i + 1}</th>`).join("")}
+            ${Array.from({ length: K }, (_, i) => {
+              const track = i + 1;
+              const loc = trackLocations[track] || "";
+              return `<th>
+                <div>Track ${track}</div>
+                <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room" title="Room / Location for Track ${track}">
+              </th>`;
+            }).join("")}
           </tr>
         </thead>
         <tbody>
           ${Array.from({ length: T }, (_, tIdx) => {
             const slot = tIdx + 1;
+            const st = slotTimes[slot] || {};
             return `
               <tr>
-                <td><strong>Slot ${slot}</strong></td>
+                <td>
+                  <strong>Slot ${slot}</strong>
+                  <div class="grid-slot-meta">
+                    <input class="grid-inline-input" data-slot-date="${slot}" type="text" value="${escapeHtml(st.sessionDate || "")}" placeholder="Date" title="Date for Slot ${slot}">
+                    <input class="grid-inline-input" data-slot-start="${slot}" type="text" value="${escapeHtml(st.startTime || "")}" placeholder="Start" title="Start time">
+                    <input class="grid-inline-input" data-slot-end="${slot}" type="text" value="${escapeHtml(st.endTime || "")}" placeholder="End" title="End time">
+                  </div>
+                </td>
                 ${Array.from({ length: K }, (_, kIdx) => {
                   const track = kIdx + 1;
                   const sid = scheduleSessionId(slot, track);
@@ -744,6 +904,29 @@ export function renderOralResults() {
   schedulePanel.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-action='open-oral-session']");
     if (btn) openOralSessionModal(btn.getAttribute("data-session-id"));
+  });
+
+  /* Inline grid editing: slot time/date and track location */
+  schedulePanel.addEventListener("change", (e) => {
+    const el = e.target;
+    if (el.dataset.slotStart) {
+      const slot = Number(el.dataset.slotStart);
+      const dateEl = schedulePanel.querySelector(`[data-slot-date="${slot}"]`);
+      const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
+      setSlotTimeFields(slot, { startTime: el.value, endTime: endEl?.value, sessionDate: dateEl?.value });
+    } else if (el.dataset.slotEnd) {
+      const slot = Number(el.dataset.slotEnd);
+      const dateEl = schedulePanel.querySelector(`[data-slot-date="${slot}"]`);
+      const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
+      setSlotTimeFields(slot, { startTime: startEl?.value, endTime: el.value, sessionDate: dateEl?.value });
+    } else if (el.dataset.slotDate) {
+      const slot = Number(el.dataset.slotDate);
+      const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
+      const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
+      setSlotTimeFields(slot, { startTime: startEl?.value, endTime: endEl?.value, sessionDate: el.value });
+    } else if (el.dataset.trackLocation) {
+      setTrackLocation(Number(el.dataset.trackLocation), el.value);
+    }
   });
 
   renderOralSessionModal();
@@ -821,8 +1004,7 @@ export function buildOralExportHtml() {
         ${exportMetaCard("Time", sessionTimeLabel(session))}
         ${exportMetaCard("Track", session.trackLabel || oralSessionLabel(session.id))}
         ${exportMetaCard("Room / Location", session.location)}
-        ${exportMetaCard("Speakers / Chair", sessionSpeakersChairLabel(session))}
-        ${exportMetaCard("Description", session.description)}
+        ${exportMetaCard("Chair", session.sessionChair)}
       </div>
       <div class="paper-list">
         ${(session.papers || []).map((paper) => `
@@ -909,6 +1091,8 @@ export function buildOralExportCsv() {
 
 export function setupOralEvents() {
   document.getElementById("runOralBtn").addEventListener("click", runOralOrganization);
+  document.getElementById("saveOralProgressBtn").addEventListener("click", saveOralProgressToServer);
+  document.getElementById("loadOralProgressBtn").addEventListener("click", loadOralProgressFromServer);
   document.getElementById("oralConferenceSelect").addEventListener("change", (e) => {
     state.oral.conference = e.target.value;
     state.oral.result = null;

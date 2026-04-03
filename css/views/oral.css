@@ -96,3 +96,42 @@
 .last-mile-tile strong {
   font-size: 0.82rem;
 }
+
+/* ── Inline grid editing inputs ────────── */
+
+.grid-inline-input {
+  display: block;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  background: transparent;
+  transition: border-color 0.15s, background 0.15s;
+  margin-top: 3px;
+}
+
+.grid-inline-input:hover {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.grid-inline-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: #fff;
+  color: var(--ink);
+}
+
+.grid-slot-meta {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.grid-slot-meta .grid-inline-input {
+  flex: 1;
+  min-width: 0;
+}

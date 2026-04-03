@@ -59,16 +59,16 @@ export function ensureSessionMetadata(session) {
   session.endTime = String(session.endTime || "").trim();
   session.trackLabel = String(session.trackLabel || "").trim();
   session.location = String(session.location || "").trim();
-  session.speakers = String(session.speakers || "").trim();
-  session.description = String(session.description || "").trim();
   return session;
 }
 
+export function sessionChairLabel(session) {
+  return String((session && session.sessionChair) || "").trim();
+}
+
+/** @deprecated Use sessionChairLabel instead */
 export function sessionSpeakersChairLabel(session) {
-  const values = [session && session.speakers, session && session.sessionChair]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-  return values.join(" / ");
+  return sessionChairLabel(session);
 }
 
 export function sessionTimeLabel(session) {

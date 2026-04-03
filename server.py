@@ -501,6 +501,90 @@ async def oral_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# ── Oral progress save/load ──────────────────────────────────────────
+
+@app.post("/api/oral/progress")
+async def save_oral_progress(request: Request):
+    """Save oral session editing progress to a JSON file."""
+    try:
+        body = await request.json()
+        conference = body.get("conference", "SIGIR25")
+        result_data = body.get("result")
+        if not result_data:
+            return {"success": False, "error": "No result data provided"}
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        path = PROJECT_ROOT / "data" / conf / "oral_progress.json"
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(result_data, f, ensure_ascii=False, indent=2)
+        logger.info(f"Oral progress saved: {path}")
+        return {"success": True, "path": str(path)}
+    except Exception as e:
+        logger.error(f"oral/progress save error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/oral/progress")
+async def load_oral_progress(conference: str = Query("SIGIR25")):
+    """Load oral session editing progress from a JSON file if it exists."""
+    try:
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        path = PROJECT_ROOT / "data" / conf / "oral_progress.json"
+        if not path.is_file():
+            return {"success": False, "error": "No saved progress found"}
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            result_data = json.load(f)
+        return {"success": True, "result": result_data}
+    except Exception as e:
+        logger.error(f"oral/progress load error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ── Poster progress save/load ─────────────────────────────────────────
+
+@app.post("/api/poster/progress")
+async def save_poster_progress(request: Request):
+    """Save poster session editing progress to a JSON file."""
+    try:
+        body = await request.json()
+        conference = body.get("conference", "SIGIR25")
+        result_data = body.get("result")
+        if not result_data:
+            return {"success": False, "error": "No result data provided"}
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        path = PROJECT_ROOT / "data" / conf / "poster_progress.json"
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(result_data, f, ensure_ascii=False, indent=2)
+        logger.info(f"Poster progress saved: {path}")
+        return {"success": True, "path": str(path)}
+    except Exception as e:
+        logger.error(f"poster/progress save error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/poster/progress")
+async def load_poster_progress(conference: str = Query("SIGIR25")):
+    """Load poster session editing progress from a JSON file if it exists."""
+    try:
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        path = PROJECT_ROOT / "data" / conf / "poster_progress.json"
+        if not path.is_file():
+            return {"success": False, "error": "No saved progress found"}
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            result_data = json.load(f)
+        return {"success": True, "result": result_data}
+    except Exception as e:
+        logger.error(f"poster/progress load error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
 # ════════════════════════════════════════════════════════════════════
 # API: Poster Session Organization
 # ════════════════════════════════════════════════════════════════════
