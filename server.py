@@ -90,7 +90,7 @@ def load_conference_papers(conference: str) -> list[Paper]:
 
     # Try to find the main paper file (prefer *Full_Papers*.json, else first json)
     # Skip known non-paper JSON files
-    _SKIP_NAMES = {"metadata", "workspace", "token_usage"}
+    _SKIP_NAMES = {"metadata", "workspace", "token_usage", "oral_progress", "poster_progress"}
     paper_file = None
     for f in json_files:
         if not any(skip in f.name.lower() for skip in _SKIP_NAMES):
