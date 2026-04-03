@@ -131,30 +131,41 @@
   }
 ]</div>
 
-          <div style="margin-top:14px">
-            <h3 style="font-size:0.9rem;margin-bottom:8px">Output Formats</h3>
-            <div class="grid-3" style="gap:10px">
-              <div class="control-card" style="text-align:center;padding:12px">
-                <div style="font-size:1.2rem;margin-bottom:4px">&#128196;</div>
-                <h3 style="font-size:0.82rem;margin:0 0 2px">Excel</h3>
+          <div style="margin-top:18px">
+            <h3 style="font-size:0.9rem;margin-bottom:4px">Output data</h3>
+            <div class="tiny" style="margin-bottom:10px">TaxoConf produces results in multiple formats to suit different workflows.</div>
+            <div class="grid-3" style="gap:12px">
+              <div class="control-card" style="text-align:center;padding:18px 14px">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="margin-bottom:6px">
+                  <rect x="4" y="4" width="20" height="20" rx="4" stroke="var(--accent)" stroke-width="1.5"/>
+                  <line x1="4" y1="11" x2="24" y2="11" stroke="var(--accent)" stroke-width="1"/>
+                  <line x1="11" y1="11" x2="11" y2="24" stroke="var(--accent)" stroke-width="1"/>
+                </svg>
+                <h3 style="font-size:0.86rem;margin:0 0 3px">CSV</h3>
+                <div class="tiny">Session lists and schedules</div>
+              </div>
+              <div class="control-card" style="text-align:center;padding:18px 14px">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="margin-bottom:6px">
+                  <rect x="4" y="4" width="20" height="20" rx="4" stroke="#185FA5" stroke-width="1.5"/>
+                  <text x="14" y="18" text-anchor="middle" fill="#185FA5" font-size="10" font-weight="500" font-family="monospace">&lt;/&gt;</text>
+                </svg>
+                <h3 style="font-size:0.86rem;margin:0 0 3px">HTML</h3>
+                <div class="tiny">Interactive pages for browsing</div>
+              </div>
+              <div class="control-card" style="text-align:center;padding:18px 14px">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style="margin-bottom:6px">
+                  <rect x="4" y="4" width="20" height="20" rx="4" stroke="var(--accent)" stroke-width="1.5"/>
+                  <text x="14" y="18" text-anchor="middle" fill="var(--accent)" font-size="9" font-weight="500" font-family="monospace">xlsx</text>
+                </svg>
+                <h3 style="font-size:0.86rem;margin:0 0 3px">Excel</h3>
                 <div class="tiny">Spreadsheets using conference template</div>
-              </div>
-              <div class="control-card" style="text-align:center;padding:12px">
-                <div style="font-size:1.2rem;margin-bottom:4px">&#128462;</div>
-                <h3 style="font-size:0.82rem;margin:0 0 2px">CSV</h3>
-                <div class="tiny">Same schema as Excel for compatibility</div>
-              </div>
-              <div class="control-card" style="text-align:center;padding:12px">
-                <div style="font-size:1.2rem;margin-bottom:4px">&#127760;</div>
-                <h3 style="font-size:0.82rem;margin:0 0 2px">HTML</h3>
-                <div class="tiny">Interactive pages with search and print</div>
               </div>
             </div>
           </div>
 
-          <div style="margin-top:14px">
-            <h3 style="font-size:0.9rem;margin-bottom:8px">How To Use</h3>
-            <div class="tiny">
+          <div style="margin-top:18px">
+            <h3 style="font-size:0.9rem;margin-bottom:4px">How to use</h3>
+            <div class="tiny" style="line-height:1.75">
               1. Select <strong>Oral Session Organization</strong> or <strong>Poster Session Organization</strong> in the sidebar.<br>
               2. Configure session parameters (tracks, time slots, capacity) in the setup panel.<br>
               3. Click <strong>Run</strong> to generate the schedule with LLM-powered session naming.<br>
@@ -164,12 +175,53 @@
             </div>
           </div>
 
-          <div style="margin-top:14px">
-            <h3 style="font-size:0.9rem;margin-bottom:8px">Resources</h3>
+          <div style="margin-top:18px">
+            <h3 style="font-size:0.9rem;margin-bottom:8px">Project page and materials</h3>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <a href="https://github.com/DaominJi/TaxoConf" target="_blank" class="control-card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;text-decoration:none;color:inherit">
+                <div style="width:36px;height:36px;border-radius:8px;background:#f4f3ef;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 1.667C5.4 1.667 1.667 5.4 1.667 10c0 3.683 2.392 6.808 5.708 7.917.417.075.567-.183.567-.4v-1.417c-2.325.508-2.817-1.125-2.817-1.125-.375-.967-.925-1.225-.925-1.225-.758-.517.058-.508.058-.508.833.058 1.275.858 1.275.858.742 1.275 1.942.908 2.417.692.075-.542.292-.908.525-1.117-1.858-.208-3.808-.933-3.808-4.15 0-.917.325-1.667.858-2.25-.083-.208-.375-1.067.083-2.217 0 0 .7-.225 2.292.858a7.983 7.983 0 0 1 4.183 0c1.583-1.083 2.283-.858 2.283-.858.458 1.15.167 2.008.083 2.217.542.583.858 1.333.858 2.25 0 3.225-1.958 3.933-3.825 4.142.3.258.567.767.567 1.55v2.3c0 .217.15.483.575.4A8.337 8.337 0 0 0 18.333 10C18.333 5.4 14.6 1.667 10 1.667z" fill="var(--ink)"/>
+                  </svg>
+                </div>
+                <div>
+                  <strong style="font-size:0.86rem">GitHub repository</strong><br>
+                  <span class="tiny">Source code, installation guide, and local deployment instructions</span>
+                </div>
+              </a>
+              <a href="https://taxoconf.github.io/taxoconf/" target="_blank" class="control-card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;text-decoration:none;color:inherit">
+                <div style="width:36px;height:36px;border-radius:8px;background:#eeedfe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="10" r="7.5" stroke="#534AB7" stroke-width="1.3" fill="none"/>
+                    <path d="M10 2.5c0 0-3.5 4-3.5 7.5s3.5 7.5 3.5 7.5m0-15c0 0 3.5 4 3.5 7.5s-3.5 7.5-3.5 7.5M3 7.5h14M3 12.5h14" stroke="#534AB7" stroke-width="1"/>
+                  </svg>
+                </div>
+                <div>
+                  <strong style="font-size:0.86rem">Online demo</strong><br>
+                  <span class="tiny">taxoconf.github.io/taxoconf</span>
+                </div>
+              </a>
+              <a href="https://drive.google.com/drive/folders/1CGWR8dQAImLSdPQ58_7c_KENvS-6L9ca?usp=drive_link" target="_blank" class="control-card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;text-decoration:none;color:inherit">
+                <div style="width:36px;height:36px;border-radius:8px;background:#e1f5ee;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M4.5 15.5h11l-3.5-5.5H8z" fill="var(--accent)" opacity="0.25"/>
+                    <path d="M8 3.5L3 12.5h4.5l5-9zM12 3.5l5 9h-4.5" stroke="var(--accent)" stroke-width="1.3" fill="none"/>
+                  </svg>
+                </div>
+                <div>
+                  <strong style="font-size:0.86rem">Supplementary materials</strong><br>
+                  <span class="tiny">Datasets, results, and documentation on Google Drive</span>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div style="margin-top:18px">
+            <h3 style="font-size:0.9rem;margin-bottom:4px">Contact</h3>
             <div class="tiny">
-              <a href="https://github.com/DaominJi/TaxoConf" target="_blank" style="color:var(--accent)">GitHub Repository</a> &mdash; Source code and installation guide<br>
-              <a href="https://drive.google.com/drive/folders/1CGWR8dQAImLSdPQ58_7c_KENvS-6L9ca?usp=drive_link" target="_blank" style="color:var(--accent)">Supplementary Materials</a> &mdash; Datasets and documentation<br>
-              Contact: <a href="mailto:daominji@student.rmit.edu.au" style="color:var(--accent)">daominji@student.rmit.edu.au</a>
+              We welcome any feedback, feature requests, or collaboration inquiries. Please reach out via
+              <a href="https://github.com/DaominJi/TaxoConf/issues" target="_blank" style="color:var(--accent)">GitHub Issues</a> or email us at
+              <a href="mailto:daominji@student.rmit.edu.au" style="color:var(--accent)">daominji@student.rmit.edu.au</a>.
             </div>
           </div>
         </section>
