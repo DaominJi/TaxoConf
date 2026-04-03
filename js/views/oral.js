@@ -797,14 +797,24 @@ export function buildOralExportHtml() {
       </tr>
     `);
   }
-  const sections = result.sessions.map((session) => `
+  const sessionAnchors = result.sessions.map(s => oralSessionAnchorId(s));
+  const sections = result.sessions.map((session, idx) => {
+    const prevAnchor = idx > 0 ? sessionAnchors[idx - 1] : null;
+    const nextAnchor = idx < result.sessions.length - 1 ? sessionAnchors[idx + 1] : null;
+    const navLinks = [
+      `<a href="#top">\u2191 Overview</a>`,
+      prevAnchor ? `<a href="#${prevAnchor}">\u2190 Prev</a>` : "",
+      nextAnchor ? `<a href="#${nextAnchor}">Next \u2192</a>` : "",
+    ].filter(Boolean).join("");
+
+    return `
     <section id="${oralSessionAnchorId(session)}" class="session-card">
       <div class="session-head">
         <div>
           <h3>${escapeHtml(oralSessionName(session))}</h3>
-          <div class="session-kicker">${escapeHtml(oralSessionLabel(session.id))}</div>
+          <div class="session-kicker">${escapeHtml(oralSessionLabel(session.id))} \u00b7 ${session.papers.length} papers</div>
         </div>
-        <a class="back-link" href="#top">Back to overview</a>
+        <div class="session-nav">${navLinks}</div>
       </div>
       <div class="meta-grid">
         ${exportMetaCard("Date", session.sessionDate)}
@@ -818,22 +828,25 @@ export function buildOralExportHtml() {
         ${(session.papers || []).map((paper) => `
           <div class="paper-item">
             <strong>${escapeHtml(oralPaperId(paper))} \u00b7 ${escapeHtml(paper.title || "")}</strong>
-            <span>Presenters: ${escapeHtml(oralPresentersLabel(paper))}</span>
-            <span>Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+            <span class="paper-authors">Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+            ${paper.abstract ? `<details><summary>Show abstract</summary><div class="paper-abstract">${escapeHtml(paper.abstract)}</div></details>` : ""}
           </div>
-        `).join("") || `<div class="paper-item"><strong>Empty session</strong><span>No papers assigned.</span></div>`}
+        `).join("") || `<div class="paper-item"><strong>Empty session</strong><span class="paper-authors">No papers assigned.</span></div>`}
       </div>
-    </section>
-  `).join("");
+    </section>`;
+  }).join("");
+
+  const totalPapers = result.papers ? result.papers.length : result.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0);
   const summaryHtml = [
-    exportSummaryChip("Papers", result.papers.length),
+    exportSummaryChip("Papers", totalPapers),
     exportSummaryChip("Sessions", result.sessions.length),
     exportSummaryChip("Tracks", state.oral.parallelSessions),
     exportSummaryChip("Time Slots", state.oral.timeSlots),
   ].join("");
   return buildStyledExportHtml({
     title: "Oral Session Schedule",
-    subtitle: "A polished conference-ready schedule export with linked overview and session cards.",
+    subtitle: `${result.sessions.length} sessions across ${state.oral.parallelSessions} parallel tracks and ${state.oral.timeSlots} time slots.`,
+    conference: state.oral.conference,
     summaryHtml,
     headerHtml: `
       <tr>

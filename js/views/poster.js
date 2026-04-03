@@ -972,14 +972,24 @@ export function buildPosterExportHtml() {
       </tr>
     `);
   }
-  const sections = result.sessions.map((session) => `
+  const sessionAnchors = result.sessions.map(s => posterSessionAnchorId(s));
+  const sections = result.sessions.map((session, sIdx) => {
+    const prevAnchor = sIdx > 0 ? sessionAnchors[sIdx - 1] : null;
+    const nextAnchor = sIdx < result.sessions.length - 1 ? sessionAnchors[sIdx + 1] : null;
+    const navLinks = [
+      `<a href="#top">\u2191 Overview</a>`,
+      prevAnchor ? `<a href="#${prevAnchor}">\u2190 Prev</a>` : "",
+      nextAnchor ? `<a href="#${nextAnchor}">Next \u2192</a>` : "",
+    ].filter(Boolean).join("");
+
+    return `
     <section id="${posterSessionAnchorId(session)}" class="session-card">
       <div class="session-head">
         <div>
           <h3>${escapeHtml(posterSessionName(session))}</h3>
-          <div class="session-kicker">${escapeHtml(posterSessionLabel(session.id))} \u00b7 ${escapeHtml(result.layoutType)}</div>
+          <div class="session-kicker">${escapeHtml(posterSessionLabel(session.id))} \u00b7 ${escapeHtml(result.layoutType)} \u00b7 ${session.papers.length} papers</div>
         </div>
-        <a class="back-link" href="#top">Back to overview</a>
+        <div class="session-nav">${navLinks}</div>
       </div>
       <div class="meta-grid">
         ${exportMetaCard("Date", session.sessionDate)}
@@ -996,30 +1006,33 @@ export function buildPosterExportHtml() {
             return `
               <div class="paper-item">
                 <strong>${escapeHtml(label)}</strong>
-                <span>Empty board</span>
+                <span class="paper-authors">Empty board</span>
               </div>
             `;
           }
           return `
             <div class="paper-item">
               <strong>${escapeHtml(label)} \u00b7 ${escapeHtml(posterPaperId(paper))} \u00b7 ${escapeHtml(paper.title || "")}</strong>
-              <span>Presenters: ${escapeHtml(posterPresentersLabel(paper))}</span>
-              <span>Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+              <span class="paper-authors">Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+              ${paper.abstract ? `<details><summary>Show abstract</summary><div class="paper-abstract">${escapeHtml(paper.abstract)}</div></details>` : ""}
             </div>
           `;
         }).join("")}
       </div>
-    </section>
-  `).join("");
+    </section>`;
+  }).join("");
+
+  const totalPapers = result.papers ? result.papers.length : result.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0);
   const summaryHtml = [
-    exportSummaryChip("Papers", result.papers.length),
+    exportSummaryChip("Papers", totalPapers),
     exportSummaryChip("Sessions", result.sessions.length),
     exportSummaryChip("Layout", result.layoutType),
     exportSummaryChip("Boards / Session", result.sessionCapacity),
   ].join("");
   return buildStyledExportHtml({
     title: "Poster Session Schedule",
-    subtitle: "A styled poster-session export with linked overview and session detail cards.",
+    subtitle: `${result.sessions.length} poster sessions using ${escapeHtml(result.layoutType)} layout with ${result.sessionCapacity} boards per session.`,
+    conference: state.poster.conference,
     summaryHtml,
     headerHtml: `<tr>${Array.from({ length: columns }, (_, idx) => `<th>Column ${idx + 1}</th>`).join("")}</tr>`,
     rowsHtml: rows.join(""),
