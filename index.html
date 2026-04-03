@@ -59,9 +59,16 @@
           <input type="text" id="wsNewDesc" placeholder="e.g. AAAI 2026 Full Papers" />
         </div>
         <div class="control-group">
-          <label class="control-label">Papers JSON (optional, upload later if needed)</label>
-          <input type="file" id="wsNewPapersFile" accept=".json" style="font-size:0.82rem;margin-top:4px" />
-          <div class="tiny" style="margin-top:4px">Expected format: array of <code>[{id, title, authors, abstract?}, ...]</code></div>
+          <label class="control-label" for="wsNewMode">Session type</label>
+          <select id="wsNewMode">
+            <option value="oral">Oral sessions</option>
+            <option value="poster">Poster sessions</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label class="control-label">Papers JSON or CSV (optional, upload later if needed)</label>
+          <input type="file" id="wsNewPapersFile" accept=".json,.csv" style="font-size:0.82rem;margin-top:4px" />
+          <div class="tiny" style="margin-top:4px">Expected format: array of <code>[{id, title, authors, abstract?}, ...]</code> or CSV with same columns</div>
         </div>
         <div class="ws-modal-actions">
           <button class="btn-primary" id="wsCreateBtn" type="button">Create</button>

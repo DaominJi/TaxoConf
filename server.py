@@ -77,31 +77,30 @@ def discover_conferences() -> list[str]:
     return conferences
 
 
-def _resolve_paper_file(conf_dir: Path, mode: str = "oral") -> Path:
-    """Resolve the paper JSON file for a conference workspace and mode.
+def _resolve_paper_file(conf_dir: Path) -> Path:
+    """Resolve the paper JSON file for a workspace.
 
     Resolution order:
-    1. workspace.json → oral_papers / poster_papers path (explicit)
-    2. {mode}/papers.json (convention-based subfolder)
-    3. Legacy fallback: first non-system JSON in the root directory
+    1. workspace.json → "papers" path (explicit)
+    2. papers.json in the workspace root (convention)
+    3. Legacy fallback: first non-system JSON in root directory
     """
     ws_json = conf_dir / "workspace.json"
     if ws_json.is_file():
         try:
             with open(ws_json) as f:
                 meta = json.load(f)
-            key = f"{mode}_papers"
-            if key in meta and meta[key]:
-                explicit = conf_dir / meta[key]
+            if meta.get("papers"):
+                explicit = conf_dir / meta["papers"]
                 if explicit.is_file():
                     return explicit
         except Exception:
             pass
 
-    # Convention: {mode}/papers.json
-    mode_file = conf_dir / mode / "papers.json"
-    if mode_file.is_file():
-        return mode_file
+    # Convention: papers.json
+    papers_file = conf_dir / "papers.json"
+    if papers_file.is_file():
+        return papers_file
 
     # Legacy fallback: first non-system JSON in root
     _SKIP_NAMES = {"metadata", "workspace", "token_usage", "oral_progress", "poster_progress"}
@@ -109,7 +108,7 @@ def _resolve_paper_file(conf_dir: Path, mode: str = "oral") -> Path:
         if not any(skip in f.name.lower() for skip in _SKIP_NAMES):
             return f
 
-    raise ValueError(f"No paper data found for mode '{mode}' in {conf_dir}")
+    raise ValueError(f"No paper data found in {conf_dir}")
 
 
 def _parse_papers_json(paper_file: Path) -> list[Paper]:
@@ -148,13 +147,25 @@ def _parse_papers_json(paper_file: Path) -> list[Paper]:
     return papers
 
 
-def load_conference_papers(conference: str, mode: str = "oral") -> list[Paper]:
-    """Load papers for a specific mode (oral/poster) from a conference workspace."""
+def load_conference_papers(conference: str) -> list[Paper]:
+    """Load papers from a workspace directory."""
     conf_dir = DATA_DIR / conference
     if not conf_dir.is_dir():
         raise ValueError(f"Conference directory not found: {conf_dir}")
-    paper_file = _resolve_paper_file(conf_dir, mode)
+    paper_file = _resolve_paper_file(conf_dir)
     return _parse_papers_json(paper_file)
+
+
+def get_workspace_mode(conference: str) -> str:
+    """Read the mode (oral/poster) from workspace.json. Defaults to 'oral'."""
+    ws_json = DATA_DIR / conference / "workspace.json"
+    if ws_json.is_file():
+        try:
+            with open(ws_json) as f:
+                return json.load(f).get("mode", "oral")
+        except Exception:
+            pass
+    return "oral"
 
 
 # ── Caches ──
@@ -165,10 +176,9 @@ _similarity_cache: dict[str, SimilarityEngine] = {}
 
 
 def get_papers(conference: str, mode: str = "oral") -> list[Paper]:
-    cache_key = f"{conference}_{mode}"
-    if cache_key not in _paper_cache:
-        _paper_cache[cache_key] = load_conference_papers(conference, mode)
-    return _paper_cache[cache_key]
+    if conference not in _paper_cache:
+        _paper_cache[conference] = load_conference_papers(conference)
+    return _paper_cache[conference]
 
 
 def get_taxonomy(conference: str, papers: list[Paper]) -> TaxonomyNode:
@@ -384,7 +394,7 @@ async def oral_info(conference: str = Query("SIGIR25")):
         # Normalize conference name
         conf = _resolve_conference(conference, conferences)
 
-        papers = get_papers(conf, "oral")
+        papers = get_papers(conf)
         stats = get_presenter_stats(papers)
         suggested = compute_oral_defaults(len(papers))
 
@@ -426,7 +436,7 @@ async def oral_run(request: Request):
         config.NUM_SLOTS = time_slots
         config.NUM_PARALLEL_TRACKS = parallel_sessions
 
-        papers = get_papers(conf, "oral")
+        papers = get_papers(conf)
         papers_map = {p.id: p for p in papers}
         taxonomy_root = get_taxonomy(conf, papers)
 
@@ -706,7 +716,7 @@ async def poster_info(conference: str = Query("SIGIR25")):
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
 
-        papers = get_papers(conf, "poster")
+        papers = get_papers(conf)
         stats = get_presenter_stats(papers)
         suggested = compute_poster_defaults(len(papers))
 
@@ -761,7 +771,7 @@ async def poster_run(request: Request):
         config.POSTER_PROXIMITY = optimize_within
         config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
 
-        papers = get_papers(conf, "poster")
+        papers = get_papers(conf)
         papers_map = {p.id: p for p in papers}
         taxonomy_root = get_taxonomy(conf, papers)
 
@@ -888,7 +898,7 @@ async def assignment_info(conference: str = Query("SIGIR25")):
     conferences = discover_conferences()
     conf = _resolve_conference(conference, conferences)
     try:
-        papers = get_papers(conf, "oral")
+        papers = get_papers(conf)
         paper_count = len(papers)
     except Exception:
         paper_count = 0
@@ -1086,10 +1096,15 @@ async def create_workspace(request: Request):
     ws_dir.mkdir(parents=True, exist_ok=True)
 
     import datetime
+    mode = body.get("mode", "oral")
+    if mode not in ("oral", "poster"):
+        mode = "oral"
+
     meta = {
         "name": safe_name,
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "description": body.get("description", ""),
+        "mode": mode,
         "paper_count": 0,
     }
     with open(ws_dir / "workspace.json", "w") as fh:
@@ -1131,32 +1146,23 @@ async def get_workspace(name: str):
 
 @app.post("/api/workspaces/{name}/upload")
 async def upload_workspace_papers(name: str, request: Request):
-    """Upload a paper JSON file to a workspace.
-
-    Accepts an optional `mode` field ("oral" or "poster") to store papers
-    in the appropriate subfolder. Defaults to "oral".
-    """
+    """Upload a paper JSON file to a workspace. Saved as papers.json."""
     ws_dir = DATA_DIR / name
     if not ws_dir.is_dir():
         return JSONResponse({"error": f"Workspace '{name}' not found."}, status_code=404)
 
     body = await request.json()
     papers = body.get("papers", [])
-    mode = body.get("mode", "oral")
-    if mode not in ("oral", "poster"):
-        mode = "oral"
 
     if not papers or not isinstance(papers, list):
         return JSONResponse({"error": "Invalid papers data. Expected a JSON array."}, status_code=400)
 
-    # Save papers under mode subfolder
-    mode_dir = ws_dir / mode
-    mode_dir.mkdir(parents=True, exist_ok=True)
-    out_path = mode_dir / "papers.json"
+    # Save as papers.json in the workspace root
+    out_path = ws_dir / "papers.json"
     with open(out_path, "w") as fh:
         json.dump(papers, fh, indent=2)
 
-    # Update workspace.json with explicit path and count
+    # Update workspace.json
     _ensure_workspace_json(ws_dir, name)
     ws_json = ws_dir / "workspace.json"
     try:
@@ -1164,8 +1170,8 @@ async def upload_workspace_papers(name: str, request: Request):
             meta = json.load(fh)
     except Exception:
         meta = {"name": name}
-    meta[f"{mode}_papers"] = f"{mode}/papers.json"
-    meta[f"{mode}_paper_count"] = len(papers)
+    meta["papers"] = "papers.json"
+    meta["paper_count"] = len(papers)
     with open(ws_json, "w") as fh:
         json.dump(meta, fh, indent=2)
 

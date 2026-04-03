@@ -6,17 +6,61 @@ import { state } from "./state.js";
 import { API_BASE } from "./api.js";
 import { showToast } from "./toast.js";
 
+/** Parse a CSV string into an array of paper objects [{id, title, authors, abstract}]. */
+function parseCSVtoPapers(csvText) {
+  const lines = csvText.split("\n").map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const header = lines[0].split(",").map(h => h.trim().replace(/^["']|["']$/g, "").toLowerCase());
+  const idCol = header.indexOf("id") >= 0 ? header.indexOf("id") : header.indexOf("paper_id");
+  const titleCol = header.indexOf("title");
+  const authorsCol = header.indexOf("authors");
+  const abstractCol = header.indexOf("abstract");
+  if (titleCol < 0) { alert("CSV must have a 'title' column."); return []; }
+
+  const papers = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = [];
+    let inQuotes = false, field = "";
+    for (const ch of lines[i]) {
+      if (ch === '"') { inQuotes = !inQuotes; }
+      else if (ch === "," && !inQuotes) { row.push(field.trim()); field = ""; }
+      else { field += ch; }
+    }
+    row.push(field.trim());
+    papers.push({
+      id: idCol >= 0 ? row[idCol] || String(i) : String(i),
+      title: row[titleCol] || "",
+      authors: row[authorsCol] || "",
+      abstract: abstractCol >= 0 ? row[abstractCol] || "" : "",
+    });
+  }
+  return papers;
+}
+
+/** Full workspace list (cached for filtering by mode). */
+let _allWorkspaces = [];
+
+export function getAllWorkspaces() { return _allWorkspaces; }
+
+/** Get workspaces filtered by mode ("oral" or "poster"). */
+export function getWorkspacesByMode(mode) {
+  return _allWorkspaces.filter(ws => (ws.mode || "oral") === mode);
+}
+
 export async function loadWorkspaces() {
   try {
     const res = await fetch(`${API_BASE}/workspaces`);
     const data = await res.json();
     const list = data.result || [];
+    _allWorkspaces = list;
     const sel = document.getElementById("workspaceSelect");
     sel.innerHTML = "";
     list.forEach(ws => {
       const opt = document.createElement("option");
       opt.value = ws.name;
-      opt.textContent = ws.name + (ws.paper_count ? ` (${ws.paper_count} papers)` : "");
+      const mode = ws.mode || "oral";
+      const modeLabel = mode === "poster" ? "poster" : "oral";
+      opt.textContent = `${ws.name} (${modeLabel}, ${ws.paper_count || 0} papers)`;
       sel.appendChild(opt);
     });
     /* If we had a previously selected workspace, keep it; otherwise pick first */
@@ -67,16 +111,17 @@ export async function createWorkspace() {
   if (!name) { showToast("Please enter a workspace name."); return; }
 
   const desc = document.getElementById("wsNewDesc").value.trim();
+  const mode = document.getElementById("wsNewMode").value || "oral";
   const btn = document.getElementById("wsCreateBtn");
   btn.disabled = true;
   btn.textContent = "Creating...";
 
   try {
-    /* 1. Create workspace */
+    /* 1. Create workspace with mode */
     const res = await fetch(`${API_BASE}/workspaces`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description: desc }),
+      body: JSON.stringify({ name, description: desc, mode }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to create workspace");
@@ -86,12 +131,17 @@ export async function createWorkspace() {
     if (fileInput.files && fileInput.files[0]) {
       const file = fileInput.files[0];
       const text = await file.text();
-      const papers = JSON.parse(text);
+      let papers;
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        papers = parseCSVtoPapers(text);
+      } else {
+        papers = JSON.parse(text);
+      }
       const safeName = data.workspace?.name || name;
       const uploadRes = await fetch(`${API_BASE}/workspaces/${encodeURIComponent(safeName)}/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ papers, filename: file.name }),
+        body: JSON.stringify({ papers }),
       });
       if (!uploadRes.ok) {
         const upErr = await uploadRes.json();
