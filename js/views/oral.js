@@ -299,7 +299,7 @@ function setTrackLocation(track, location) {
 function ensureTrackNames(result, K) {
   if (!result.trackNames || result.trackNames.length < K) {
     result.trackNames = Array.from({ length: K }, (_, i) =>
-      (result.trackNames && result.trackNames[i]) || `Session ${String.fromCharCode(65 + i)}`
+      (result.trackNames && result.trackNames[i]) || `Location ${String.fromCharCode(65 + i)}`
     );
   }
   return result.trackNames;
@@ -1124,45 +1124,35 @@ export function buildOralExportHtml() {
 export function buildOralExportCsv() {
   const result = state.oral.result;
   if (!result) return "";
+  const K = state.oral.parallelSessions;
+  const names = ensureTrackNames(result, K);
   const rows = [[
-    "Date",
-    "Time Start",
-    "Time End",
+    "*Date",
+    "*Time Start",
+    "*Time End",
     "Tracks",
-    "Session Title",
+    "*Session Title",
     "Room/Location",
     "Description",
-    "Speakers/Session Chair",
+    "Speakers",
     "Authors",
     "Session or Sub-session(Sub)",
   ]];
   result.sessions.forEach((session) => {
+    ensureSessionMetadata(session);
+    const trackName = (session.track && names[session.track - 1]) || session.trackLabel || "";
     rows.push([
       session.sessionDate || "",
       session.startTime || "",
       session.endTime || "",
-      session.trackLabel || "",
+      trackName,
       oralSessionName(session),
       session.location || "",
-      session.description || "",
-      sessionSpeakersChairLabel(session) || "",
       "",
-      "Session",
+      session.sessionChair || "",
+      "",
+      "",
     ]);
-    (session.papers || []).forEach((paper) => {
-      rows.push([
-        session.sessionDate || "",
-        session.startTime || "",
-        session.endTime || "",
-        session.trackLabel || "",
-        paper.title || oralPaperId(paper),
-        session.location || "",
-        oralPaperId(paper),
-        oralPresentersLabel(paper),
-        paperAuthorsOrPresentersLabel(paper),
-        "Sub",
-      ]);
-    });
   });
   return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
 }

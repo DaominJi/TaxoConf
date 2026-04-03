@@ -1146,18 +1146,19 @@ export function buildPosterExportCsv() {
   const result = state.poster.result;
   if (!result) return "";
   const rows = [[
-    "Date",
-    "Time Start",
-    "Time End",
+    "*Date",
+    "*Time Start",
+    "*Time End",
     "Tracks",
-    "Session Title",
+    "*Session Title",
     "Room/Location",
     "Description",
-    "Speakers/Session Chair",
+    "Speakers",
     "Authors",
     "Session or Sub-session(Sub)",
   ]];
   result.sessions.forEach((session) => {
+    ensureSessionMetadata(session);
     rows.push([
       session.sessionDate || "",
       session.startTime || "",
@@ -1165,26 +1166,11 @@ export function buildPosterExportCsv() {
       session.trackLabel || "",
       posterSessionName(session),
       session.location || "",
-      session.description || "",
-      sessionSpeakersChairLabel(session) || "",
       "",
-      "Session",
+      session.sessionChair || "",
+      "",
+      "",
     ]);
-    (session.cells || []).forEach((paper, idx) => {
-      if (!paper) return;
-      rows.push([
-        session.sessionDate || "",
-        session.startTime || "",
-        session.endTime || "",
-        session.trackLabel || "",
-        paper.title || posterPaperId(paper),
-        session.location || "",
-        `${posterPaperId(paper)} | ${posterBoardLabel(idx, result.layoutType, result.rows, result.cols)}`,
-        posterPresentersLabel(paper),
-        paperAuthorsOrPresentersLabel(paper),
-        "Sub",
-      ]);
-    });
   });
   return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
 }
