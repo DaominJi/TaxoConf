@@ -78,6 +78,12 @@ export async function loadWorkspaces() {
   }
 }
 
+/** Callbacks registered by view modules for workspace switch. */
+const _onSwitchCallbacks = [];
+
+/** Register a callback to run when the workspace changes. */
+export function onWorkspaceSwitch(fn) { _onSwitchCallbacks.push(fn); }
+
 export function switchWorkspace(name) {
   /* Update all conference references across all task states */
   state.oral.conference = name;
@@ -88,11 +94,15 @@ export function switchWorkspace(name) {
   state.poster.result = null;
   state.oral.demoInfo = null;
   state.poster.demoInfo = null;
-  /* Re-render — these functions must be available globally or injected */
-  if (typeof window.renderOralResults === "function") window.renderOralResults();
-  if (typeof window.renderPosterResults === "function") window.renderPosterResults();
-  if (typeof window.loadOralDemoInfo === "function") void window.loadOralDemoInfo();
-  if (typeof window.loadPosterDemoInfo === "function") void window.loadPosterDemoInfo();
+
+  /* Sync the oral/poster conference selects with the sidebar */
+  const oralSel = document.getElementById("oralConferenceSelect");
+  if (oralSel) oralSel.value = name;
+  const posterSel = document.getElementById("posterConferenceSelect");
+  if (posterSel) posterSel.value = name;
+
+  /* Notify view modules */
+  _onSwitchCallbacks.forEach(fn => { try { fn(name); } catch (_) {} });
 }
 
 export function openCreateWorkspaceModal() {

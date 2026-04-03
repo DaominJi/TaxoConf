@@ -33,6 +33,7 @@ import {
   exportMetaCard,
 } from "../export-template.js";
 import { collapseSetupPanel, updateSetupSummary } from "../router.js";
+import { onWorkspaceSwitch } from "../workspace.js";
 import { showToast } from "../toast.js";
 
 /* ═══════════════════ Save / restore progress ═══════════════════ */
@@ -1173,6 +1174,9 @@ export function setupOralEvents() {
     state.oral.result = null;
     state.oral.activeSessionId = null;
     state.oral.activeHardPaperId = null;
+    /* Sync sidebar workspace select */
+    const wsSel = document.getElementById("workspaceSelect");
+    if (wsSel) wsSel.value = e.target.value;
     void loadOralDemoInfo();
   });
   ["oralParallelInput", "oralSlotsInput", "oralMaxInput", "oralMinInput"].forEach((id) => {
@@ -1232,5 +1236,14 @@ export function setupOralEvents() {
   document.getElementById("oralHardPaperModalClose").addEventListener("click", closeOralHardPaperModal);
   document.getElementById("oralHardPaperModal").addEventListener("click", (e) => {
     if (e.target.id === "oralHardPaperModal") closeOralHardPaperModal();
+  });
+
+  /* Reload oral data when workspace changes */
+  onWorkspaceSwitch(() => {
+    state.oral.result = null;
+    state.oral.activeSessionId = null;
+    state.oral.activeHardPaperId = null;
+    void loadOralDemoInfo();
+    renderOralResults();
   });
 }

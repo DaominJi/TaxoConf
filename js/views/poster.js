@@ -34,6 +34,7 @@ import {
   exportMetaCard,
 } from "../export-template.js";
 import { collapseSetupPanel, updateSetupSummary } from "../router.js";
+import { onWorkspaceSwitch } from "../workspace.js";
 import { showToast } from "../toast.js";
 
 /* ═══════════════════ Save / restore progress ═══════════════════ */
@@ -1186,6 +1187,9 @@ export function setupPosterEvents() {
     state.poster.result = null;
     state.poster.activeSessionId = null;
     state.poster.activeHardPaperId = null;
+    /* Sync sidebar workspace select */
+    const wsSel = document.getElementById("workspaceSelect");
+    if (wsSel) wsSel.value = e.target.value;
     void loadPosterDemoInfo();
   });
   const posterInputHandler = () => {
@@ -1257,5 +1261,14 @@ export function setupPosterEvents() {
   document.getElementById("posterHardPaperModalClose").addEventListener("click", closePosterHardPaperModal);
   document.getElementById("posterHardPaperModal").addEventListener("click", (e) => {
     if (e.target.id === "posterHardPaperModal") closePosterHardPaperModal();
+  });
+
+  /* Reload poster data when workspace changes */
+  onWorkspaceSwitch(() => {
+    state.poster.result = null;
+    state.poster.activeSessionId = null;
+    state.poster.activeHardPaperId = null;
+    void loadPosterDemoInfo();
+    renderPosterResults();
   });
 }
