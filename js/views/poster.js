@@ -69,64 +69,84 @@ function restoreLocalProgress() {
   return true;
 }
 
-export async function savePosterProgressToServer() {
-  const result = state.poster.result;
-  if (!result) { alert("No poster result to save."); return; }
-  const name = prompt("Save name:", `poster_${new Date().toISOString().slice(0, 10)}`);
-  if (!name) return;
-  try {
-    const resp = await apiPost("/poster/progress", {
-      conference: state.poster.conference,
-      result: result,
-      name: name,
-    });
-    if (resp.success) {
-      showToast(`Saved as "${resp.name || name}".`);
-    } else {
-      alert("Failed to save: " + (resp.error || "Unknown error"));
-    }
-  } catch (e) {
-    alert("Save failed: " + e.message);
-  }
+/** Open a modal to save poster progress with a name. */
+export function openPosterSaveModal() {
+  if (!state.poster.result) { alert("No poster result to save."); return; }
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Save Poster Session Progress";
+  body.innerHTML = `
+    <div class="control-group">
+      <label class="control-label">Save Name</label>
+      <input id="progressSaveNameInput" type="text" value="poster_${new Date().toISOString().slice(0, 10)}" placeholder="Enter a name for this save">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="progressSaveConfirmBtn" type="button">Save</button>
+    </div>
+  `;
+  body.querySelector("#progressSaveConfirmBtn").addEventListener("click", async () => {
+    const name = body.querySelector("#progressSaveNameInput").value.trim();
+    if (!name) return;
+    try {
+      const resp = await apiPost("/poster/progress", { conference: state.poster.conference, result: state.poster.result, name });
+      if (resp.success) showToast("Saved as \\u201c" + (resp.name || name) + "\\u201d.");
+      else alert("Failed: " + (resp.error || "Unknown error"));
+    } catch (e) { alert("Save failed: " + e.message); }
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+  });
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
 }
 
-/** Refresh the load-progress dropdown with available saves from server. */
-export async function refreshPosterProgressList() {
-  const sel = document.getElementById("loadPosterProgressSelect");
-  if (!sel) return;
-  sel.innerHTML = `<option value="">Load Progress...</option>`;
+/** Open a modal to load poster progress from a list of saves. */
+export async function openPosterLoadModal() {
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Load Poster Session Progress";
+  body.innerHTML = `<div class="tiny">Loading saved sessions...</div>`;
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
   try {
     const listResp = await apiGet(`/poster/progress/list?conference=${encodeURIComponent(state.poster.conference)}`);
-    if (listResp.success && listResp.saves && listResp.saves.length > 0) {
-      listResp.saves.forEach((s) => {
-        const date = new Date(s.modified * 1000).toLocaleString();
-        const opt = document.createElement("option");
-        opt.value = s.name.replace(" (legacy)", "");
-        opt.textContent = `${s.name} (${date})`;
-        sel.appendChild(opt);
-      });
+    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
+      body.innerHTML = `<div class="tiny">No saved progress found for this conference.</div>`;
+      return;
     }
-  } catch (_) {}
-}
-
-/** Load a specific named save from the server. */
-async function loadPosterProgressByName(name) {
-  if (!name) return;
-  try {
-    const resp = await apiGet(`/poster/progress?conference=${encodeURIComponent(state.poster.conference)}&name=${encodeURIComponent(name)}`);
-    if (resp.success && resp.result) {
-      state.poster.result = resp.result;
-      autoSavePosterProgress();
-      renderPosterResults();
-      showToast(`Loaded "${name}".`);
-    } else {
-      showToast("Failed to load save.");
-    }
+    body.innerHTML = `
+      <div class="tiny" style="margin-bottom:10px">Select a save to load:</div>
+      <div class="progress-save-list">
+        ${listResp.saves.map((s) => {
+          const date = new Date(s.modified * 1000).toLocaleString();
+          const name = s.name.replace(" (legacy)", "");
+          return `<button class="progress-save-item" data-save-name="${escapeHtml(name)}" type="button">
+            <strong>${escapeHtml(s.name)}</strong>
+            <span>${date}</span>
+          </button>`;
+        }).join("")}
+      </div>
+    `;
+    body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-save-name]");
+      if (!btn) return;
+      const name = btn.dataset.saveName;
+      try {
+        const resp = await apiGet(`/poster/progress?conference=${encodeURIComponent(state.poster.conference)}&name=${encodeURIComponent(name)}`);
+        if (resp.success && resp.result) {
+          state.poster.result = resp.result;
+          autoSavePosterProgress();
+          renderPosterResults();
+          showToast("Loaded \\u201c" + name + "\\u201d.");
+        } else { showToast("Failed to load."); }
+      } catch (err) { alert("Load failed: " + err.message); }
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+    }, { once: true });
   } catch (e) {
-    alert("Load failed: " + e.message);
+    body.innerHTML = `<div class="tiny" style="color:var(--danger)">Error: ${escapeHtml(e.message)}</div>`;
   }
-  const sel = document.getElementById("loadPosterProgressSelect");
-  if (sel) sel.value = "";
 }
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
@@ -1173,13 +1193,8 @@ export function buildPosterExportCsv() {
 
 export function setupPosterEvents() {
   document.getElementById("runPosterBtn").addEventListener("click", runPosterOrganization);
-  document.getElementById("savePosterProgressBtn").addEventListener("click", async () => {
-    await savePosterProgressToServer();
-    refreshPosterProgressList();
-  });
-  const loadPosterSel = document.getElementById("loadPosterProgressSelect");
-  loadPosterSel.addEventListener("focus", () => refreshPosterProgressList());
-  loadPosterSel.addEventListener("change", (e) => { if (e.target.value) loadPosterProgressByName(e.target.value); });
+  document.getElementById("savePosterProgressBtn").addEventListener("click", openPosterSaveModal);
+  document.getElementById("loadPosterProgressBtn").addEventListener("click", openPosterLoadModal);
   document.getElementById("posterConferenceSelect").addEventListener("change", (e) => {
     state.poster.conference = e.target.value;
     state.poster.result = null;

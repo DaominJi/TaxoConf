@@ -70,64 +70,84 @@ function restoreLocalProgress() {
 }
 
 /** Save progress to backend server. */
-export async function saveOralProgressToServer() {
-  const result = state.oral.result;
-  if (!result) { alert("No oral result to save."); return; }
-  const name = prompt("Save name:", `oral_${new Date().toISOString().slice(0, 10)}`);
-  if (!name) return;
-  try {
-    const resp = await apiPost("/oral/progress", {
-      conference: state.oral.conference,
-      result: result,
-      name: name,
-    });
-    if (resp.success) {
-      showToast(`Saved as "${resp.name || name}".`);
-    } else {
-      alert("Failed to save: " + (resp.error || "Unknown error"));
-    }
-  } catch (e) {
-    alert("Save failed: " + e.message);
-  }
+/** Open a modal to save oral progress with a name. */
+export function openOralSaveModal() {
+  if (!state.oral.result) { alert("No oral result to save."); return; }
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Save Oral Session Progress";
+  body.innerHTML = `
+    <div class="control-group">
+      <label class="control-label">Save Name</label>
+      <input id="progressSaveNameInput" type="text" value="oral_${new Date().toISOString().slice(0, 10)}" placeholder="Enter a name for this save">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="progressSaveConfirmBtn" type="button">Save</button>
+    </div>
+  `;
+  body.querySelector("#progressSaveConfirmBtn").addEventListener("click", async () => {
+    const name = body.querySelector("#progressSaveNameInput").value.trim();
+    if (!name) return;
+    try {
+      const resp = await apiPost("/oral/progress", { conference: state.oral.conference, result: state.oral.result, name });
+      if (resp.success) showToast("Saved as \\u201c" + (resp.name || name) + "\\u201d.");
+      else alert("Failed: " + (resp.error || "Unknown error"));
+    } catch (e) { alert("Save failed: " + e.message); }
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+  });
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
 }
 
-/** Refresh the load-progress dropdown with available saves from server. */
-export async function refreshOralProgressList() {
-  const sel = document.getElementById("loadOralProgressSelect");
-  if (!sel) return;
-  sel.innerHTML = `<option value="">Load Progress...</option>`;
+/** Open a modal to load oral progress from a list of saves. */
+export async function openOralLoadModal() {
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Load Oral Session Progress";
+  body.innerHTML = `<div class="tiny">Loading saved sessions...</div>`;
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
   try {
     const listResp = await apiGet(`/oral/progress/list?conference=${encodeURIComponent(state.oral.conference)}`);
-    if (listResp.success && listResp.saves && listResp.saves.length > 0) {
-      listResp.saves.forEach((s) => {
-        const date = new Date(s.modified * 1000).toLocaleString();
-        const opt = document.createElement("option");
-        opt.value = s.name.replace(" (legacy)", "");
-        opt.textContent = `${s.name} (${date})`;
-        sel.appendChild(opt);
-      });
+    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
+      body.innerHTML = `<div class="tiny">No saved progress found for this conference.</div>`;
+      return;
     }
-  } catch (_) {}
-}
-
-/** Load a specific named save from the server. */
-async function loadOralProgressByName(name) {
-  if (!name) return;
-  try {
-    const resp = await apiGet(`/oral/progress?conference=${encodeURIComponent(state.oral.conference)}&name=${encodeURIComponent(name)}`);
-    if (resp.success && resp.result) {
-      state.oral.result = resp.result;
-      autoSaveOralProgress();
-      renderOralResults();
-      showToast(`Loaded "${name}".`);
-    } else {
-      showToast("Failed to load save.");
-    }
+    body.innerHTML = `
+      <div class="tiny" style="margin-bottom:10px">Select a save to load:</div>
+      <div class="progress-save-list">
+        ${listResp.saves.map((s) => {
+          const date = new Date(s.modified * 1000).toLocaleString();
+          const name = s.name.replace(" (legacy)", "");
+          return `<button class="progress-save-item" data-save-name="${escapeHtml(name)}" type="button">
+            <strong>${escapeHtml(s.name)}</strong>
+            <span>${date}</span>
+          </button>`;
+        }).join("")}
+      </div>
+    `;
+    body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-save-name]");
+      if (!btn) return;
+      const name = btn.dataset.saveName;
+      try {
+        const resp = await apiGet(`/oral/progress?conference=${encodeURIComponent(state.oral.conference)}&name=${encodeURIComponent(name)}`);
+        if (resp.success && resp.result) {
+          state.oral.result = resp.result;
+          autoSaveOralProgress();
+          renderOralResults();
+          showToast("Loaded \\u201c" + name + "\\u201d.");
+        } else { showToast("Failed to load."); }
+      } catch (err) { alert("Load failed: " + err.message); }
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+    }, { once: true });
   } catch (e) {
-    alert("Load failed: " + e.message);
+    body.innerHTML = `<div class="tiny" style="color:var(--danger)">Error: ${escapeHtml(e.message)}</div>`;
   }
-  const sel = document.getElementById("loadOralProgressSelect");
-  if (sel) sel.value = "";
 }
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
@@ -1120,13 +1140,13 @@ export function buildOralExportCsv() {
 
 export function setupOralEvents() {
   document.getElementById("runOralBtn").addEventListener("click", runOralOrganization);
-  document.getElementById("saveOralProgressBtn").addEventListener("click", async () => {
-    await saveOralProgressToServer();
-    refreshOralProgressList();
+  document.getElementById("saveOralProgressBtn").addEventListener("click", openOralSaveModal);
+  document.getElementById("loadOralProgressBtn").addEventListener("click", openOralLoadModal);
+  document.getElementById("progressModalClose").addEventListener("click", () => {
+    const m = document.getElementById("progressModal");
+    m.classList.remove("is-open");
+    m.setAttribute("aria-hidden", "true");
   });
-  const loadSel = document.getElementById("loadOralProgressSelect");
-  loadSel.addEventListener("focus", () => refreshOralProgressList());
-  loadSel.addEventListener("change", (e) => { if (e.target.value) loadOralProgressByName(e.target.value); });
   document.getElementById("oralConferenceSelect").addEventListener("change", (e) => {
     state.oral.conference = e.target.value;
     state.oral.result = null;

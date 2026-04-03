@@ -317,15 +317,17 @@
       <section class="task-view" id="task-oral">
         <section class="panel setup-panel" id="oralSetupPanel">
           <div class="task-toolbar">
-            <h2 class="toolbar-title">Oral Session Organization</h2>
-            <div class="toolbar-actions">
-              <select id="oralConferenceSelect" title="Conference"></select>
-              <button id="runOralBtn" class="btn-primary" type="button">Run</button>
+            <div class="toolbar-row">
+              <h2 class="toolbar-title">Oral Session Organization</h2>
+              <select id="oralConferenceSelect" class="toolbar-conference" title="Conference"></select>
+            </div>
+            <div class="toolbar-row">
+              <button id="runOralBtn" class="btn-primary" type="button">Run Oral Organization</button>
               <button id="exportOralBtn" class="btn-muted" type="button">Export</button>
-              <button id="saveOralProgressBtn" class="btn-muted" type="button">Save</button>
-              <select id="loadOralProgressSelect" title="Load saved progress" style="font-size:0.78rem;padding:4px 8px;border-radius:8px;border:1px solid var(--line)">
-                <option value="">Load Progress...</option>
-              </select>
+              <span class="toolbar-sep"></span>
+              <button id="saveOralProgressBtn" class="btn-muted" type="button">Save Progress</button>
+              <button id="loadOralProgressBtn" class="btn-muted" type="button">Load Progress</button>
+              <span class="toolbar-sep"></span>
               <button class="btn-configure" type="button" data-toggle-setup="oralSetupPanel">Configure <span class="caret">&#9660;</span></button>
             </div>
             <div id="oralRunStatus" class="run-status toolbar-status" aria-live="polite"></div>
@@ -396,15 +398,17 @@
       <section class="task-view" id="task-poster">
         <section class="panel setup-panel" id="posterSetupPanel">
           <div class="task-toolbar">
-            <h2 class="toolbar-title">Poster Session Organization</h2>
-            <div class="toolbar-actions">
-              <select id="posterConferenceSelect" title="Conference"></select>
-              <button id="runPosterBtn" class="btn-primary" type="button">Run</button>
+            <div class="toolbar-row">
+              <h2 class="toolbar-title">Poster Session Organization</h2>
+              <select id="posterConferenceSelect" class="toolbar-conference" title="Conference"></select>
+            </div>
+            <div class="toolbar-row">
+              <button id="runPosterBtn" class="btn-primary" type="button">Run Poster Organization</button>
               <button id="exportPosterBtn" class="btn-muted" type="button">Export</button>
-              <button id="savePosterProgressBtn" class="btn-muted" type="button">Save</button>
-              <select id="loadPosterProgressSelect" title="Load saved progress" style="font-size:0.78rem;padding:4px 8px;border-radius:8px;border:1px solid var(--line)">
-                <option value="">Load Progress...</option>
-              </select>
+              <span class="toolbar-sep"></span>
+              <button id="savePosterProgressBtn" class="btn-muted" type="button">Save Progress</button>
+              <button id="loadPosterProgressBtn" class="btn-muted" type="button">Load Progress</button>
+              <span class="toolbar-sep"></span>
               <button class="btn-configure" type="button" data-toggle-setup="posterSetupPanel">Configure <span class="caret">&#9660;</span></button>
             </div>
             <div id="posterRunStatus" class="run-status toolbar-status" aria-live="polite"></div>
@@ -640,6 +644,17 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=3"></script>
+  <!-- Save/Load Progress Modal -->
+  <div id="progressModal" class="modal-shell" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="progressModalTitle">Save / Load Progress</h3>
+        <button id="progressModalClose" class="modal-close" type="button">Close</button>
+      </div>
+      <div id="progressModalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>

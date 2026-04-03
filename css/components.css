@@ -26,37 +26,50 @@
   top: 0;
   z-index: 20;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
   border-radius: var(--radius) var(--radius) 0 0;
   margin: -14px -14px 14px;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .task-toolbar .toolbar-title {
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
-  flex: 1;
-  min-width: 120px;
+  white-space: nowrap;
 }
 
-.task-toolbar .toolbar-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
+.toolbar-conference {
+  flex: 1;
+  min-width: 140px;
+  max-width: 300px;
+}
+
+.toolbar-sep {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  margin: 0 2px;
 }
 
 .task-toolbar .toolbar-status {
   font-size: 0.78rem;
   color: var(--ink-soft);
+  width: 100%;
 }
 
 .btn-configure {
@@ -557,6 +570,46 @@ tbody tr.selected { background: #eaf8f5; }
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 10px;
+}
+
+/* ── Progress save/load list ────────── */
+
+.progress-save-list {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-save-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff, #f6fbf9);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.progress-save-item:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(19, 143, 139, 0.1);
+  transform: translateY(-1px);
+}
+
+.progress-save-item strong {
+  font-size: 0.88rem;
+}
+
+.progress-save-item span {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .paper-move-card {
