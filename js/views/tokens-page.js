@@ -145,4 +145,9 @@ export async function resetGlobalTokenStats() {
 export function setupTokenStatsEvents() {
   document.getElementById("tokenResetWorkspaceBtn").addEventListener("click", resetWorkspaceTokenStats);
   document.getElementById("tokenResetGlobalBtn").addEventListener("click", resetGlobalTokenStats);
+
+  /* Load token stats when tab is activated */
+  import("../router.js").then(({ onTaskEnter }) => {
+    onTaskEnter("tokens", loadTokenStats);
+  });
 }

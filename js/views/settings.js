@@ -99,28 +99,9 @@ export async function loadSettings() {
       if (s.llm.api_keys_status) _apiKeysStatus = s.llm.api_keys_status;
       document.getElementById("settingsProvider").value = s.llm.provider || "openai";
       await updateModelDropdown(s.llm.model || "");
-      document.getElementById("settingsTemp").value = s.llm.temperature ?? 0.3;
       const src = s.llm.api_key_source || "environment";
       document.querySelectorAll('input[name="apiKeySource"]').forEach((r) => (r.checked = r.value === src));
       toggleManualKeyRow();
-    }
-    if (s.oral) {
-      document.getElementById("settingsOralMethod").value = s.oral.method || "greedy";
-      document.getElementById("settingsOralSolver").value = s.oral.solver || "heuristic";
-      document.getElementById("settingsOralAlpha").value = s.oral.alpha ?? 1.0;
-      document.getElementById("settingsOralConflict").checked = s.oral.enable_conflict_avoidance !== false;
-    }
-    if (s.poster) {
-      document.getElementById("settingsPosterMethod").value = s.poster.method || "greedy";
-      document.getElementById("settingsPosterSolver").value = s.poster.solver || "heuristic";
-      document.getElementById("settingsPosterAlpha").value = s.poster.alpha ?? 1.0;
-      document.getElementById("settingsPosterConflict").checked = s.poster.enable_conflict_avoidance !== false;
-      document.getElementById("settingsPosterProximity").checked = s.poster.proximity !== false;
-    }
-    if (s.similarity) {
-      document.getElementById("settingsSimilarity").value = s.similarity.method || "tfidf";
-      document.getElementById("settingsEmbeddingModel").value = s.similarity.embedding_model || "all-MiniLM-L6-v2";
-      document.getElementById("settingsEmbeddingCache").checked = s.similarity.cache_enabled !== false;
     }
   } catch (e) {
     console.warn("Failed to load settings:", e);
@@ -137,26 +118,7 @@ export async function saveSettings() {
     llm: {
       provider: document.getElementById("settingsProvider").value,
       model: document.getElementById("settingsModel").value,
-      temperature: parseFloat(document.getElementById("settingsTemp").value) || 0.3,
       api_key_source: apiKeySource,
-    },
-    oral: {
-      method: document.getElementById("settingsOralMethod").value,
-      solver: document.getElementById("settingsOralSolver").value,
-      alpha: parseFloat(document.getElementById("settingsOralAlpha").value) || 1.0,
-      enable_conflict_avoidance: document.getElementById("settingsOralConflict").checked,
-    },
-    poster: {
-      method: document.getElementById("settingsPosterMethod").value,
-      solver: document.getElementById("settingsPosterSolver").value,
-      alpha: parseFloat(document.getElementById("settingsPosterAlpha").value) || 1.0,
-      enable_conflict_avoidance: document.getElementById("settingsPosterConflict").checked,
-      proximity: document.getElementById("settingsPosterProximity").checked,
-    },
-    similarity: {
-      method: document.getElementById("settingsSimilarity").value,
-      embedding_model: document.getElementById("settingsEmbeddingModel").value,
-      cache_enabled: document.getElementById("settingsEmbeddingCache").checked,
     },
   };
 
@@ -254,4 +216,9 @@ export function setupSettingsEvents() {
   });
   document.getElementById("settingsSaveBtn").addEventListener("click", saveSettings);
   document.getElementById("settingsTestLLMBtn").addEventListener("click", testLLMConnection);
+
+  /* Load settings when tab is activated */
+  import("../router.js").then(({ onTaskEnter }) => {
+    onTaskEnter("settings", loadSettings);
+  });
 }

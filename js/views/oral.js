@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
 import {
   submissionDist,
   avgDist,
@@ -32,6 +32,124 @@ import {
   exportSummaryChip,
   exportMetaCard,
 } from "../export-template.js";
+import { collapseSetupPanel, updateSetupSummary } from "../router.js";
+import { onWorkspaceSwitch } from "../workspace.js";
+import { showToast } from "../toast.js";
+
+/* ═══════════════════ Save / restore progress ═══════════════════ */
+
+function localStorageKey() {
+  return `taxoconf_oral_progress_${state.oral.conference || "default"}`;
+}
+
+function autoSaveOralProgress() {
+  try {
+    const result = state.oral.result;
+    if (!result) return;
+    localStorage.setItem(localStorageKey(), JSON.stringify(result));
+  } catch (_) { /* localStorage full or unavailable */ }
+}
+
+function getLocalSavedProgress() {
+  try {
+    const raw = localStorage.getItem(localStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+function clearLocalSavedProgress() {
+  try { localStorage.removeItem(localStorageKey()); } catch (_) {}
+}
+
+/** Restore progress from localStorage into state and re-render. */
+function restoreLocalProgress() {
+  const saved = getLocalSavedProgress();
+  if (!saved) return false;
+  state.oral.result = saved;
+  renderOralResults();
+  return true;
+}
+
+/** Save progress to backend server. */
+/** Open a modal to save oral progress with a name. */
+export function openOralSaveModal() {
+  if (!state.oral.result) { alert("No oral result to save."); return; }
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Save Oral Session Progress";
+  body.innerHTML = `
+    <div class="control-group">
+      <label class="control-label">Save Name</label>
+      <input id="progressSaveNameInput" type="text" value="oral_${new Date().toISOString().slice(0, 10)}" placeholder="Enter a name for this save">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="progressSaveConfirmBtn" type="button">Save</button>
+    </div>
+  `;
+  body.querySelector("#progressSaveConfirmBtn").addEventListener("click", async () => {
+    const name = body.querySelector("#progressSaveNameInput").value.trim();
+    if (!name) return;
+    try {
+      const resp = await apiPost("/oral/progress", { conference: state.oral.conference, result: state.oral.result, name });
+      if (resp.success) showToast("Saved as \\u201c" + (resp.name || name) + "\\u201d.");
+      else alert("Failed: " + (resp.error || "Unknown error"));
+    } catch (e) { alert("Save failed: " + e.message); }
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+  });
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+/** Open a modal to load oral progress from a list of saves. */
+export async function openOralLoadModal() {
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Load Oral Session Progress";
+  body.innerHTML = `<div class="tiny">Loading saved sessions...</div>`;
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  try {
+    const listResp = await apiGet(`/oral/progress/list?conference=${encodeURIComponent(state.oral.conference)}`);
+    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
+      body.innerHTML = `<div class="tiny">No saved progress found for this conference.</div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div class="tiny" style="margin-bottom:10px">Select a save to load:</div>
+      <div class="progress-save-list">
+        ${listResp.saves.map((s) => {
+          const date = new Date(s.modified * 1000).toLocaleString();
+          const name = s.name.replace(" (legacy)", "");
+          return `<button class="progress-save-item" data-save-name="${escapeHtml(name)}" type="button">
+            <strong>${escapeHtml(s.name)}</strong>
+            <span>${date}</span>
+          </button>`;
+        }).join("")}
+      </div>
+    `;
+    body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-save-name]");
+      if (!btn) return;
+      const name = btn.dataset.saveName;
+      try {
+        const resp = await apiGet(`/oral/progress?conference=${encodeURIComponent(state.oral.conference)}&name=${encodeURIComponent(name)}`);
+        if (resp.success && resp.result) {
+          state.oral.result = resp.result;
+          autoSaveOralProgress();
+          renderOralResults();
+          showToast("Loaded \\u201c" + name + "\\u201d.");
+        } else { showToast("Failed to load."); }
+      } catch (err) { alert("Load failed: " + err.message); }
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+    }, { once: true });
+  } catch (e) {
+    body.innerHTML = `<div class="tiny" style="color:var(--danger)">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
 
@@ -129,10 +247,79 @@ function setOralSessionFields(sessionId, fields) {
     endTime: String(fields.endTime || "").trim(),
     trackLabel: String(fields.trackLabel || "").trim(),
     location: String(fields.location || "").trim(),
-    speakers: String(fields.speakers || "").trim(),
-    description: String(fields.description || "").trim(),
   });
+
+  /* Propagate time/date changes to all parallel sessions in the same slot */
+  const timeFields = ["startTime", "endTime", "sessionDate"];
+  const hasTimeChange = timeFields.some((f) => fields[f] !== undefined);
+  if (hasTimeChange && session.slot != null) {
+    result.sessions.forEach((s) => {
+      if (s.slot === session.slot && s.id !== session.id) {
+        ensureSessionMetadata(s);
+        timeFields.forEach((f) => { s[f] = session[f]; });
+      }
+    });
+  }
+
+  /* Auto-save to localStorage */
+  autoSaveOralProgress();
   renderOralResults();
+}
+
+/** Set time fields for all sessions in a given slot (called from inline grid editing). */
+function setSlotTimeFields(slot, fields) {
+  const result = state.oral.result;
+  if (!result) return;
+  result.sessions.forEach((s) => {
+    if (s.slot === slot) {
+      ensureSessionMetadata(s);
+      if (fields.startTime !== undefined) s.startTime = String(fields.startTime || "").trim();
+      if (fields.endTime !== undefined) s.endTime = String(fields.endTime || "").trim();
+      if (fields.sessionDate !== undefined) s.sessionDate = String(fields.sessionDate || "").trim();
+    }
+  });
+  autoSaveOralProgress();
+  renderOralResults();
+}
+
+/** Set location for all sessions in a given track. */
+function setTrackLocation(track, location) {
+  const result = state.oral.result;
+  if (!result) return;
+  result.sessions.forEach((s) => {
+    if (s.track === track) {
+      ensureSessionMetadata(s);
+      s.location = String(location || "").trim();
+    }
+  });
+  autoSaveOralProgress();
+  renderOralResults();
+}
+
+/** Get or initialize track names array on the result. */
+function ensureTrackNames(result, K) {
+  if (!result.trackNames || result.trackNames.length < K) {
+    result.trackNames = Array.from({ length: K }, (_, i) =>
+      (result.trackNames && result.trackNames[i]) || `Location ${String.fromCharCode(65 + i)}`
+    );
+  }
+  return result.trackNames;
+}
+
+/** Set the name for a track and propagate trackLabel to all sessions in it. */
+function setTrackName(track, name) {
+  const result = state.oral.result;
+  if (!result) return;
+  const K = state.oral.parallelSessions;
+  const names = ensureTrackNames(result, K);
+  names[track - 1] = String(name || "").trim();
+  result.sessions.forEach((s) => {
+    if (s.track === track) {
+      ensureSessionMetadata(s);
+      s.trackLabel = names[track - 1];
+    }
+  });
+  autoSaveOralProgress();
 }
 
 /* ═══════════════════ Load info ═══════════════════ */
@@ -158,6 +345,30 @@ export async function loadOralDemoInfo() {
   } catch (err) {
     state.oral.demoInfo = { error: err.message };
   }
+
+  /* Check for saved progress in localStorage */
+  if (!state.oral.result) {
+    const saved = getLocalSavedProgress();
+    if (saved) {
+      const banner = document.getElementById("oralSourceStatus");
+      if (banner) {
+        banner.innerHTML += `<br><strong style="color:var(--accent-warm)">Unsaved session edits found.</strong>
+          <button class="btn-muted" style="padding:2px 8px;font-size:0.76rem;margin-left:6px" data-action="restore-oral-local">Restore</button>
+          <button class="btn-muted" style="padding:2px 8px;font-size:0.76rem;margin-left:4px" data-action="discard-oral-local">Discard</button>`;
+        banner.addEventListener("click", (e) => {
+          if (e.target.closest("[data-action='restore-oral-local']")) {
+            restoreLocalProgress();
+            showToast("Session edits restored from local storage.");
+          } else if (e.target.closest("[data-action='discard-oral-local']")) {
+            clearLocalSavedProgress();
+            showToast("Local saved progress discarded.");
+            renderOralCapacityNotice();
+          }
+        }, { once: true });
+      }
+    }
+  }
+
   renderOralCapacityNotice();
   renderOralResults();
 }
@@ -190,12 +401,10 @@ export function renderOralCapacityNotice() {
   const maxCapacity = totalSessions * state.oral.maxPerSession;
 
   sourceStatus.innerHTML = `
-    conference: <span class="mono">${escapeHtml(state.oral.demoInfo.conference || state.oral.conference)}</span><br>
-    papers: <span class="mono">${paperCount}</span><br>
-    unique presenters: <span class="mono">${state.oral.demoInfo.presenterCount}</span><br>
-    repeated presenters: <span class="mono">${state.oral.demoInfo.multiPresenterCount}</span><br>
-    paper data: <span class="mono">${state.oral.demoInfo.paperDataPath}</span><br>
-    similarity matrix: <span class="mono">${state.oral.demoInfo.similarityMatrixPath}</span>
+    Conference: <span class="mono">${escapeHtml(state.oral.demoInfo.conference || state.oral.conference)}</span><br>
+    Papers: <span class="mono">${paperCount}</span><br>
+    Unique authors: <span class="mono">${state.oral.demoInfo.presenterCount}</span><br>
+    Authors with multiple papers: <span class="mono">${state.oral.demoInfo.multiPresenterCount}</span>
   `;
 
   const issues = [];
@@ -269,6 +478,14 @@ export async function runOralOrganization() {
     state.oral.result = prepareOralResult(requireApiResult(resp, "Oral organization"));
     state.oral.activeSessionId = null;
     state.oral.activeHardPaperId = null;
+    /* Auto-collapse setup panel + sidebar, show summary */
+    const r = state.oral.result;
+    const sessionCount = r.sessions ? r.sessions.length : 0;
+    const totalPapers = r.papers ? r.papers.length : r.sessions ? r.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0) : 0;
+    updateSetupSummary("oralSummaryChip",
+      `${state.oral.demoInfo?.conference || state.oral.conference} \u00b7 ${totalPapers} papers \u00b7 ${sessionCount} sessions \u00b7 ${state.oral.parallelSessions} tracks \u00d7 ${state.oral.timeSlots} slots`);
+    collapseSetupPanel("oralSetupPanel");
+    document.querySelector(".app")?.classList.add("sidebar-collapsed");
   } catch (err) {
     alert(`Oral organization backend error: ${err.message}`);
   } finally {
@@ -354,7 +571,6 @@ function oralSchedulePreviewHtml(session) {
   }
   const paperIds = session.papers.slice(0, 5).map((paper) => escapeHtml(oralPaperId(paper))).join(", ");
   const meta = [
-    `Topics: ${escapeHtml(sessionTopicNames(session.papers, oralPaperDist, 2))}`,
     paperIds ? `Papers: ${paperIds}${session.papers.length > 5 ? ", ..." : ""}` : "",
     sessionTimeLabel(session) ? `Time: ${escapeHtml(sessionTimeLabel(session))}` : "",
     session.location ? `Location: ${escapeHtml(session.location)}` : "",
@@ -400,9 +616,9 @@ export function renderOralSessionModal() {
     </div>
     <div class="paper-move-card">
       <div><strong>Session Metadata</strong></div>
-      <div class="tiny" style="margin-top:4px">Edit the generated session title, scheduling fields, location, description, and speaker information used by the export.</div>
+      <div class="tiny" style="margin-top:4px">Edit the session title, chair, scheduling, and location. Time and date changes apply to all parallel sessions in the same slot.</div>
       <div class="modal-field-grid">
-        <div class="modal-field">
+        <div class="modal-field modal-field-span">
           <label>Session Name</label>
           <input data-oral-session-name-input="${session.id}" type="text" value="${escapeHtml(session.sessionName || "")}" placeholder="Concise academic session name">
         </div>
@@ -411,32 +627,24 @@ export function renderOralSessionModal() {
           <input data-oral-session-chair-input="${session.id}" type="text" value="${escapeHtml(session.sessionChair || "")}" placeholder="Leave blank or assign manually">
         </div>
         <div class="modal-field">
-          <label>Date</label>
-          <input data-oral-session-date-input="${session.id}" type="text" value="${escapeHtml(session.sessionDate || "")}" placeholder="e.g. 2025-07-17">
-        </div>
-        <div class="modal-field">
-          <label>Track</label>
+          <label>Track Label</label>
           <input data-oral-session-track-input="${session.id}" type="text" value="${escapeHtml(session.trackLabel || "")}" placeholder="Optional track label">
         </div>
         <div class="modal-field">
+          <label>Date</label>
+          <input data-oral-session-date-input="${session.id}" type="date" value="${escapeHtml(session.sessionDate || "")}">
+        </div>
+        <div class="modal-field">
           <label>Start Time</label>
-          <input data-oral-session-start-input="${session.id}" type="text" value="${escapeHtml(session.startTime || "")}" placeholder="e.g. 09:00">
+          <input data-oral-session-start-input="${session.id}" type="time" value="${escapeHtml(session.startTime || "")}">
         </div>
         <div class="modal-field">
           <label>End Time</label>
-          <input data-oral-session-end-input="${session.id}" type="text" value="${escapeHtml(session.endTime || "")}" placeholder="e.g. 10:30">
+          <input data-oral-session-end-input="${session.id}" type="time" value="${escapeHtml(session.endTime || "")}">
         </div>
         <div class="modal-field">
           <label>Room / Location</label>
           <input data-oral-session-location-input="${session.id}" type="text" value="${escapeHtml(session.location || "")}" placeholder="Optional room or venue">
-        </div>
-        <div class="modal-field">
-          <label>Speakers</label>
-          <input data-oral-session-speakers-input="${session.id}" type="text" value="${escapeHtml(session.speakers || "")}" placeholder="Optional speakers">
-        </div>
-        <div class="modal-field modal-field-span">
-          <label>Description</label>
-          <textarea data-oral-session-description-input="${session.id}" rows="3" placeholder="Optional session description">${escapeHtml(session.description || "")}</textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -465,8 +673,9 @@ export function renderOralSessionModal() {
     </div>
   `;
 
-  /* Event delegation for move and save buttons */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._oralSessionHandler) body.removeEventListener("click", body._oralSessionHandler);
+  body._oralSessionHandler = (e) => {
     const moveBtn = e.target.closest("button[data-action='move-oral-paper']");
     if (moveBtn) {
       const paperId = moveBtn.getAttribute("data-paper-id");
@@ -491,11 +700,10 @@ export function renderOralSessionModal() {
         startTime: body.querySelector(`input[data-oral-session-start-input="${sid}"]`)?.value || "",
         endTime: body.querySelector(`input[data-oral-session-end-input="${sid}"]`)?.value || "",
         location: body.querySelector(`input[data-oral-session-location-input="${sid}"]`)?.value || "",
-        speakers: body.querySelector(`input[data-oral-session-speakers-input="${sid}"]`)?.value || "",
-        description: body.querySelector(`textarea[data-oral-session-description-input="${sid}"]`)?.value || "",
       });
     }
-  });
+  };
+  body.addEventListener("click", body._oralSessionHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
@@ -566,8 +774,9 @@ export function renderOralHardPaperModal() {
     </div>
   `;
 
-  /* Event delegation */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._oralHardPaperHandler) body.removeEventListener("click", body._oralHardPaperHandler);
+  body._oralHardPaperHandler = (e) => {
     const applyBtn = e.target.closest("button[data-action='apply-oral-hard-paper']");
     if (applyBtn) {
       const currentPaperId = applyBtn.getAttribute("data-paper-id");
@@ -588,7 +797,8 @@ export function renderOralHardPaperModal() {
       closeOralHardPaperModal();
       openOralSessionModal(sid);
     }
-  });
+  };
+  body.addEventListener("click", body._oralHardPaperHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
@@ -648,21 +858,61 @@ export function renderOralResults() {
   const T = state.oral.timeSlots;
   const K = state.oral.parallelSessions;
 
+  /* Collect current time/location from first session in each slot/track */
+  const slotTimes = {};
+  const trackLocations = {};
+  result.sessions.forEach((s) => {
+    ensureSessionMetadata(s);
+    if (s.slot && !slotTimes[s.slot]) {
+      slotTimes[s.slot] = { startTime: s.startTime, endTime: s.endTime, sessionDate: s.sessionDate };
+    }
+    if (s.track && !trackLocations[s.track]) {
+      trackLocations[s.track] = s.location;
+    }
+  });
+
   schedulePanel.innerHTML = `${loadingBanner}
     <div class="schedule-shell">
       <table>
         <thead>
           <tr>
-            <th>Time Slot</th>
-            ${Array.from({ length: K }, (_, i) => `<th>Track ${i + 1}</th>`).join("")}
+            <th class="grid-header-slot">Schedule</th>
+            ${(() => {
+              const names = ensureTrackNames(result, K);
+              return Array.from({ length: K }, (_, i) => {
+                const track = i + 1;
+                const loc = trackLocations[track] || "";
+                return `<th class="grid-header-track">
+                  <input class="grid-inline-input grid-track-name" data-track-name="${track}" type="text" value="${escapeHtml(names[i])}" placeholder="Track name">
+                  <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
+                </th>`;
+              }).join("");
+            })()}
           </tr>
         </thead>
         <tbody>
           ${Array.from({ length: T }, (_, tIdx) => {
             const slot = tIdx + 1;
+            const st = slotTimes[slot] || {};
             return `
               <tr>
-                <td><strong>Slot ${slot}</strong></td>
+                <td class="grid-slot-cell">
+                  <div class="grid-slot-label">Slot ${slot}</div>
+                  <div class="grid-slot-fields">
+                    <label class="grid-field">
+                      <span>Date</span>
+                      <input class="grid-inline-input" data-slot-date="${slot}" type="date" value="${escapeHtml(st.sessionDate || "")}">
+                    </label>
+                    <label class="grid-field">
+                      <span>Start</span>
+                      <input class="grid-inline-input" data-slot-start="${slot}" type="time" value="${escapeHtml(st.startTime || "")}">
+                    </label>
+                    <label class="grid-field">
+                      <span>End</span>
+                      <input class="grid-inline-input" data-slot-end="${slot}" type="time" value="${escapeHtml(st.endTime || "")}">
+                    </label>
+                  </div>
+                </td>
                 ${Array.from({ length: K }, (_, kIdx) => {
                   const track = kIdx + 1;
                   const sid = scheduleSessionId(slot, track);
@@ -739,6 +989,31 @@ export function renderOralResults() {
     if (btn) openOralSessionModal(btn.getAttribute("data-session-id"));
   });
 
+  /* Inline grid editing: slot time/date and track location */
+  schedulePanel.addEventListener("change", (e) => {
+    const el = e.target;
+    if (el.dataset.slotStart) {
+      const slot = Number(el.dataset.slotStart);
+      const dateEl = schedulePanel.querySelector(`[data-slot-date="${slot}"]`);
+      const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
+      setSlotTimeFields(slot, { startTime: el.value, endTime: endEl?.value, sessionDate: dateEl?.value });
+    } else if (el.dataset.slotEnd) {
+      const slot = Number(el.dataset.slotEnd);
+      const dateEl = schedulePanel.querySelector(`[data-slot-date="${slot}"]`);
+      const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
+      setSlotTimeFields(slot, { startTime: startEl?.value, endTime: el.value, sessionDate: dateEl?.value });
+    } else if (el.dataset.slotDate) {
+      const slot = Number(el.dataset.slotDate);
+      const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
+      const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
+      setSlotTimeFields(slot, { startTime: startEl?.value, endTime: endEl?.value, sessionDate: el.value });
+    } else if (el.dataset.trackName) {
+      setTrackName(Number(el.dataset.trackName), el.value);
+    } else if (el.dataset.trackLocation) {
+      setTrackLocation(Number(el.dataset.trackLocation), el.value);
+    }
+  });
+
   renderOralSessionModal();
   renderOralHardPaperModal();
 }
@@ -790,43 +1065,55 @@ export function buildOralExportHtml() {
       </tr>
     `);
   }
-  const sections = result.sessions.map((session) => `
+  const sessionAnchors = result.sessions.map(s => oralSessionAnchorId(s));
+  const sections = result.sessions.map((session, idx) => {
+    const prevAnchor = idx > 0 ? sessionAnchors[idx - 1] : null;
+    const nextAnchor = idx < result.sessions.length - 1 ? sessionAnchors[idx + 1] : null;
+    const navLinks = [
+      `<a href="#top">\u2191 Overview</a>`,
+      prevAnchor ? `<a href="#${prevAnchor}">\u2190 Prev</a>` : "",
+      nextAnchor ? `<a href="#${nextAnchor}">Next \u2192</a>` : "",
+    ].filter(Boolean).join("");
+
+    return `
     <section id="${oralSessionAnchorId(session)}" class="session-card">
       <div class="session-head">
         <div>
           <h3>${escapeHtml(oralSessionName(session))}</h3>
-          <div class="session-kicker">${escapeHtml(oralSessionLabel(session.id))}</div>
+          <div class="session-kicker">${escapeHtml(oralSessionLabel(session.id))} \u00b7 ${session.papers.length} papers</div>
         </div>
-        <a class="back-link" href="#top">Back to overview</a>
+        <div class="session-nav">${navLinks}</div>
       </div>
       <div class="meta-grid">
         ${exportMetaCard("Date", session.sessionDate)}
         ${exportMetaCard("Time", sessionTimeLabel(session))}
         ${exportMetaCard("Track", session.trackLabel || oralSessionLabel(session.id))}
         ${exportMetaCard("Room / Location", session.location)}
-        ${exportMetaCard("Speakers / Chair", sessionSpeakersChairLabel(session))}
-        ${exportMetaCard("Description", session.description)}
+        ${exportMetaCard("Chair", session.sessionChair)}
       </div>
       <div class="paper-list">
         ${(session.papers || []).map((paper) => `
           <div class="paper-item">
             <strong>${escapeHtml(oralPaperId(paper))} \u00b7 ${escapeHtml(paper.title || "")}</strong>
-            <span>Presenters: ${escapeHtml(oralPresentersLabel(paper))}</span>
-            <span>Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+            <span class="paper-authors">Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+            ${paper.abstract ? `<details><summary>Show abstract</summary><div class="paper-abstract">${escapeHtml(paper.abstract)}</div></details>` : ""}
           </div>
-        `).join("") || `<div class="paper-item"><strong>Empty session</strong><span>No papers assigned.</span></div>`}
+        `).join("") || `<div class="paper-item"><strong>Empty session</strong><span class="paper-authors">No papers assigned.</span></div>`}
       </div>
-    </section>
-  `).join("");
+    </section>`;
+  }).join("");
+
+  const totalPapers = result.papers ? result.papers.length : result.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0);
   const summaryHtml = [
-    exportSummaryChip("Papers", result.papers.length),
+    exportSummaryChip("Papers", totalPapers),
     exportSummaryChip("Sessions", result.sessions.length),
     exportSummaryChip("Tracks", state.oral.parallelSessions),
     exportSummaryChip("Time Slots", state.oral.timeSlots),
   ].join("");
   return buildStyledExportHtml({
     title: "Oral Session Schedule",
-    subtitle: "A polished conference-ready schedule export with linked overview and session cards.",
+    subtitle: `${result.sessions.length} sessions across ${state.oral.parallelSessions} parallel tracks and ${state.oral.timeSlots} time slots.`,
+    conference: state.oral.conference,
     summaryHtml,
     headerHtml: `
       <tr>
@@ -842,45 +1129,35 @@ export function buildOralExportHtml() {
 export function buildOralExportCsv() {
   const result = state.oral.result;
   if (!result) return "";
+  const K = state.oral.parallelSessions;
+  const names = ensureTrackNames(result, K);
   const rows = [[
-    "Date",
-    "Time Start",
-    "Time End",
+    "*Date",
+    "*Time Start",
+    "*Time End",
     "Tracks",
-    "Session Title",
+    "*Session Title",
     "Room/Location",
     "Description",
-    "Speakers/Session Chair",
+    "Speakers",
     "Authors",
     "Session or Sub-session(Sub)",
   ]];
   result.sessions.forEach((session) => {
+    ensureSessionMetadata(session);
+    const trackName = (session.track && names[session.track - 1]) || session.trackLabel || "";
     rows.push([
       session.sessionDate || "",
       session.startTime || "",
       session.endTime || "",
-      session.trackLabel || "",
+      trackName,
       oralSessionName(session),
       session.location || "",
-      session.description || "",
-      sessionSpeakersChairLabel(session) || "",
       "",
-      "Session",
+      session.sessionChair || "",
+      "",
+      "",
     ]);
-    (session.papers || []).forEach((paper) => {
-      rows.push([
-        session.sessionDate || "",
-        session.startTime || "",
-        session.endTime || "",
-        session.trackLabel || "",
-        paper.title || oralPaperId(paper),
-        session.location || "",
-        oralPaperId(paper),
-        oralPresentersLabel(paper),
-        paperAuthorsOrPresentersLabel(paper),
-        "Sub",
-      ]);
-    });
   });
   return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
 }
@@ -889,11 +1166,21 @@ export function buildOralExportCsv() {
 
 export function setupOralEvents() {
   document.getElementById("runOralBtn").addEventListener("click", runOralOrganization);
+  document.getElementById("saveOralProgressBtn").addEventListener("click", openOralSaveModal);
+  document.getElementById("loadOralProgressBtn").addEventListener("click", openOralLoadModal);
+  document.getElementById("progressModalClose").addEventListener("click", () => {
+    const m = document.getElementById("progressModal");
+    m.classList.remove("is-open");
+    m.setAttribute("aria-hidden", "true");
+  });
   document.getElementById("oralConferenceSelect").addEventListener("change", (e) => {
     state.oral.conference = e.target.value;
     state.oral.result = null;
     state.oral.activeSessionId = null;
     state.oral.activeHardPaperId = null;
+    /* Sync sidebar workspace select */
+    const wsSel = document.getElementById("workspaceSelect");
+    if (wsSel) wsSel.value = e.target.value;
     void loadOralDemoInfo();
   });
   ["oralParallelInput", "oralSlotsInput", "oralMaxInput", "oralMinInput"].forEach((id) => {
@@ -905,16 +1192,41 @@ export function setupOralEvents() {
       renderOralCapacityNotice();
     });
   });
-  document.getElementById("oralViewModeSelect").addEventListener("change", (e) => {
-    state.oral.detailMode = e.target.value === "detailed" ? "detailed" : "concise";
-    renderOralResults();
-  });
-  document.getElementById("exportOralBtn").addEventListener("click", () => {
+  document.getElementById("exportOralBtn").addEventListener("click", async () => {
     if (!state.oral.result) {
       alert("Run oral organization first.");
       return;
     }
     const format = document.getElementById("oralExportFormatSelect").value;
+    if (format === "excel") {
+      try {
+        const result = state.oral.result;
+        const resp = await fetch(`${API_BASE}/oral/export-excel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessions: result.sessions.map((s) => ({
+              sessionName: s.sessionName || "",
+              sessionChair: s.sessionChair || "",
+              sessionDate: s.sessionDate || "",
+              startTime: s.startTime || "",
+              endTime: s.endTime || "",
+              trackLabel: s.trackLabel || "",
+              track: s.track || 0,
+              location: s.location || "",
+            })),
+            trackNames: result.trackNames || [],
+          }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "oral_schedule.xlsx"; a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) { alert("Excel export failed: " + e.message); }
+      return;
+    }
     if (format === "csv") {
       downloadFile("oral_session_schedule.csv", buildOralExportCsv(), "text/csv;charset=utf-8");
       return;
@@ -928,5 +1240,14 @@ export function setupOralEvents() {
   document.getElementById("oralHardPaperModalClose").addEventListener("click", closeOralHardPaperModal);
   document.getElementById("oralHardPaperModal").addEventListener("click", (e) => {
     if (e.target.id === "oralHardPaperModal") closeOralHardPaperModal();
+  });
+
+  /* Reload oral data when workspace changes */
+  onWorkspaceSwitch(() => {
+    state.oral.result = null;
+    state.oral.activeSessionId = null;
+    state.oral.activeHardPaperId = null;
+    void loadOralDemoInfo();
+    renderOralResults();
   });
 }

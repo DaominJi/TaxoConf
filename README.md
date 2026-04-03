@@ -1,190 +1,213 @@
-# LLM-Taxonomy Conference Session Organizer
+<p align="center">
+  <h1 align="center">TaxoConf</h1>
+  <p align="center">
+    A taxonomy-driven framework for conference session organization
+    <br />
+    <a href="https://taxoconf.github.io/taxoconf/">Online Demo</a>
+    &middot;
+    <a href="https://drive.google.com/drive/folders/1CGWR8dQAImLSdPQ58_7c_KENvS-6L9ca?usp=drive_link">Supplementary Materials</a>
+    &middot;
+    <a href="https://github.com/DaominJi/TaxoConf/issues">Report Bug</a>
+  </p>
+</p>
 
-## Overview
+---
 
-Organizes conference **oral** and **poster** sessions using a two-phase approach:
+TaxoConf constructs a hierarchical taxonomy over accepted papers using LLMs, then leverages this structure to organize conference sessions. It provides a web-based workspace with interactive schedule editing, metadata management, and multi-format export.
 
-1. **Taxonomy Construction**: Iteratively builds a topic taxonomy from paper
-   titles/abstracts using LLM-driven subdivision and classification.
-2. **Session Organization**: Maps taxonomy to sessions, then schedules them
-   with author-conflict avoidance and (for posters) proximity-aware board layouts.
+## Features
 
-## Pipeline
+| | Feature | Description |
+|---|---|---|
+| 01 | **Paper-reviewer assignment** | Matches papers to reviewers based on topical alignment via taxonomy-derived expertise distributions |
+| 02 | **PC member discovery** | Identifies additional reviewers from external pools when existing PC coverage is insufficient |
+| 03 | **Oral session organization** | Groups papers into coherent sessions across time slots and parallel tracks with conflict avoidance |
+| 04 | **Poster session organization** | Arranges posters using proximity-aware layouts (line, circle, rectangle) for topical coherence |
 
-```
-Papers (title + abstract + authors)
-        │
-        ▼
-┌──────────────────────────┐
-│  Taxonomy Builder        │  LLM iteratively subdivides & classifies
-│  (taxonomy_builder.py)   │  ⚡ Multi-threaded sibling expansion
-└──────────────────────────┘
-        │
-        ├─── ORAL PATH ────────────────┐
-        │                              │
-        ▼                              ▼
-┌──────────────────┐          ┌──────────────────────┐
-│  Session Former  │          │  Poster Former       │
-│  (merge/split)   │          │  (larger groups)     │
-└──────────────────┘          └──────────────────────┘
-        │                              │
-        ▼                              ▼
-┌──────────────────┐          ┌──────────────────────┐
-│  Graph-Coloring  │          │  Conflict-Aware      │
-│  Scheduler       │          │  Scheduler (optional)│
-└──────────────────┘          └──────────────────────┘
-        │                              │
-        ▼                              ▼
-  Oral Schedule             ┌──────────────────────┐
-  (conflict-free)           │  Floor Plan Layout   │
-                            │  (Line/Circle/Rect)  │
-                            └──────────────────────┘
-                                       │
-                                       ▼
-                              Poster Schedule
-                              (with board positions)
-```
+## Screenshots
 
-## Floor Plan Layouts
+<details>
+<summary>Click to expand</summary>
 
-The poster organizer supports three physical layouts for board assignment:
+**Overview page** &mdash; Input/output format documentation and project links
 
-### Line
-Boards in a single row. Adjacent boards present similar topics.
-```
-[Board 0] ─ [Board 1] ─ [Board 2] ─ [Board 3] ─ ...
-```
+**Oral schedule grid** &mdash; 2D schedule with inline time/date/room editing per slot and track
 
-### Circle
-Boards arranged around a circle. Adjacent boards (including wrap-around)
-present similar topics. **Right-priority mode** (default): optimizes for a
-left-to-right walking direction — the right-side neighbor of each board is
-prioritized to be more similar, so topics transition smoothly as you walk
-clockwise around the circle.
-```
-        [Board 0]
-    [5]     →     [1]    ← Walking direction: clockwise
-  [4]       →       [2]
-        [Board 3]
-```
+**Session detail panel** &mdash; Slide-in panel for editing session metadata and moving papers
 
-### Rectangle
-Boards in a grid (R rows × C cols). Papers within a row are similar;
-adjacent rows also share thematic proximity.
-```
-  Row 0: [QO paper] | [QO paper] | [QO paper] | [QO paper]
-  Row 1: [VS paper] | [VS paper] | [VS paper] | [VS paper]
-  Row 2: [TX paper] | [TX paper] | [TX paper] | [TX paper]
-```
+**Export** &mdash; Excel, CSV, and interactive HTML with search, print styles, and navigation
+
+</details>
 
 ## Quick Start
 
-### Demo (no LLM / API key needed)
+### Prerequisites
+
+- Python 3.10+
+- An API key from one of: [OpenAI](https://platform.openai.com/), [Google Gemini](https://ai.google.dev/), [Anthropic](https://console.anthropic.com/), or [xAI](https://console.x.ai/)
+
+### Installation
 
 ```bash
-pip install networkx scikit-learn numpy
+# Clone the repository
+git clone https://github.com/DaominJi/TaxoConf.git
+cd TaxoConf
 
-# Oral sessions only
-python main.py --mode oral --demo
+# Create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Poster sessions with rectangle layout + proximity
-python main.py --mode poster --demo --floor_plan rectangle --proximity
-
-# Poster sessions with circle layout
-python main.py --mode poster --demo --floor_plan circle
-
-# Both oral and poster
-python main.py --mode both --demo --floor_plan rectangle
+# Install dependencies
+pip install -r requirements.txt
+pip install openpyxl  # For Excel export
 ```
 
-### Real Data (requires OpenAI API key)
+### Set up your LLM API key
 
 ```bash
-pip install openai networkx scikit-learn numpy
-
-export OPENAI_API_KEY="sk-..."
-python main.py --input papers.json --mode both \
-    --floor_plan rectangle --proximity --poster_conflicts
+# Choose one provider:
+export OPENAI_API_KEY="sk-..."           # OpenAI
+export GOOGLE_API_KEY="AI..."            # Google Gemini
+export ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic
+export XAI_API_KEY="xai-..."             # xAI Grok
 ```
 
-### Input Format (`papers.json`)
+### Run the server
+
+```bash
+python -m uvicorn server:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Open **http://127.0.0.1:8000** in your browser.
+
+### First-time setup
+
+1. Go to **Settings** and verify your LLM provider is configured (you should see "Key configured" in green)
+2. Click **Test Connection** to confirm
+3. Create a workspace or use the default SIGIR25 demo data
+
+## Usage
+
+### 1. Create a workspace
+
+Click the **+** button in the sidebar to create a new workspace. Each workspace is either **oral** or **poster** (they use separate paper sets). Upload your paper data as JSON or CSV.
+
+### 2. Input data format
+
+TaxoConf accepts paper metadata in **JSON** or **CSV**. Required fields: `id`, `title`, `authors`. Optional: `abstract` (improves topic classification).
+
+**JSON:**
 ```json
 [
   {
-    "id": "paper_001",
-    "title": "Learned Index Structures for Dynamic Workloads",
-    "abstract": "We propose a method for ...",
-    "authors": ["Alice Chen", "Bob Zhang"]
+    "id": 1,
+    "title": "Retrieval-Augmented Generation with Adaptive Passage Selection",
+    "authors": "Alice Wang, Bob Chen, Carol Liu",
+    "abstract": "We propose a novel RAG framework..."
   }
 ]
 ```
 
-## CLI Options
+**CSV:**
+```
+id,title,authors,abstract
+1,"Retrieval-Augmented Generation with Adaptive Passage Selection","Alice Wang, Bob Chen, Carol Liu","We propose a novel RAG framework..."
+```
 
-| Option                  | Default     | Description                                  |
-|-------------------------|-------------|----------------------------------------------|
-| `--mode`                | `both`      | `oral`, `poster`, or `both`                  |
-| `--demo`                | -           | Use synthetic demo data                      |
-| `--input`               | -           | Path to papers JSON                          |
-| `--max_depth`           | `3`         | Max taxonomy depth                           |
-| `--floor_plan`          | `rectangle` | `line`, `circle`, or `rectangle`             |
-| `--rect_cols`           | `6`         | Columns per row (rectangle only)             |
-| `--proximity`           | on          | Enable proximity-based board placement       |
-| `--no_proximity`        | -           | Disable proximity optimization               |
-| `--poster_conflicts`    | on          | Avoid author conflicts in poster scheduling  |
-| `--no_poster_conflicts` | -           | Disable author conflict avoidance            |
-| `--circle_right_priority` | on        | Prioritize right-side similarity (circle)    |
-| `--no_circle_right_priority` | -      | Use symmetric circle optimization            |
-| `--poster_slots`        | `3`         | Number of poster time slots                  |
-| `--poster_parallel`     | `2`         | Number of parallel poster areas              |
-| `--oral_slots`          | `8`         | Number of oral time slots                    |
-| `--oral_tracks`         | `4`         | Number of parallel oral tracks               |
+### 3. Configure and run
+
+- Set session parameters (parallel tracks, time slots, min/max papers per session)
+- Click **Run Oral Organization** or **Run Poster Organization**
+- The system builds a taxonomy via your LLM and generates an optimized schedule
+
+### 4. Edit session metadata
+
+- **Inline grid editing**: Edit track names, room locations, dates, and times directly in the schedule grid
+- **Session detail panel**: Click any session tile to edit the session name, chair, and move papers between sessions
+- **Last-mile modifications**: Review LLM-flagged hard-to-place papers and reassign them
+
+### 5. Save and export
+
+- **Save Progress** / **Load Progress**: Persist your edits to the server with named saves
+- **Export**: Download the schedule as Excel (.xlsx using conference template), CSV, or interactive HTML
 
 ## Project Structure
 
 ```
-session_organizer/
-├── main.py                 # Entry point, CLI, demo data, pretty-print
-├── config.py               # All tunable parameters
-├── models.py               # Paper, TaxonomyNode, Session, PosterSession, etc.
-├── taxonomy_builder.py     # LLM-based iterative taxonomy construction
-├── session_organizer.py    # Oral session formation + conflict-free scheduling
-├── poster_organizer.py     # Poster session formation, scheduling, layout
-├── similarity.py           # TF-IDF / embedding paper similarity engine
-├── floor_plan.py           # Proximity layout optimizer (Line/Circle/Rectangle)
-└── output/                 # Generated schedule JSON files
+TaxoConf/
+├── server.py                 # FastAPI backend (API + static file server)
+├── taxonomy_builder.py       # LLM-based iterative taxonomy construction
+├── session_organizer.py      # Oral session formation + conflict-free scheduling
+├── poster_organizer.py       # Poster session formation + floor plan layouts
+├── session_reviewer.py       # LLM-based session review (hard paper flagging)
+├── similarity.py             # TF-IDF / embedding paper similarity engine
+├── floor_plan.py             # Proximity layout optimizer (line/circle/rectangle)
+├── token_tracker.py          # LLM token usage and cost tracking
+├── config.py                 # Configuration defaults
+├── models.py                 # Data models (Paper, Session, TaxonomyNode, etc.)
+├── index.html                # Web UI (721-line HTML shell)
+├── css/                      # Modular CSS (10 files)
+├── js/                       # ES modules (17 files)
+│   ├── app.js                # Entry point
+│   ├── state.js              # Central state management
+│   ├── views/                # Task-specific UI modules
+│   │   ├── oral.js           # Oral session organization
+│   │   ├── poster.js         # Poster session organization
+│   │   ├── settings.js       # LLM provider configuration
+│   │   └── ...
+│   └── ...
+├── template/                 # Excel export template
+├── data/                     # Workspace data directories
+│   └── {workspace}/
+│       ├── workspace.json    # Workspace metadata (name, mode, paper path)
+│       ├── papers.json       # Paper data
+│       └── progress/         # Saved editing progress
+└── requirements.txt
 ```
+
+## Supported LLM Providers
+
+| Provider | Environment Variable | Example Models |
+|----------|---------------------|----------------|
+| OpenAI | `OPENAI_API_KEY` | gpt-4o, gpt-4.1, gpt-5.4, o3-mini |
+| Google Gemini | `GOOGLE_API_KEY` | gemini-2.5-flash, gemini-2.5-pro, gemini-3.1-pro-preview |
+| Anthropic | `ANTHROPIC_API_KEY` | claude-sonnet-4-6, claude-opus-4-6, claude-haiku-4-5 |
+| xAI | `XAI_API_KEY` | grok-3, grok-4, grok-4-fast |
+
+The model can be selected in the Settings page. When an API key is configured, available models are fetched dynamically from the provider.
+
+## Deployment
+
+For local use, the dev server (`uvicorn --reload`) is sufficient. For shared access on a remote server:
+
+```bash
+# Production deployment with nginx reverse proxy
+python -m uvicorn server:app --host 127.0.0.1 --port 8000
+
+# Then configure nginx to proxy port 80/443 → 8000
+# and use Let's Encrypt for HTTPS
+```
+
+See the full [deployment guide](https://github.com/DaominJi/TaxoConf/wiki/Deployment) for Docker and nginx configuration.
 
 ## Algorithms
 
-### Taxonomy Construction (Multi-Threaded)
-Iterative LLM-driven process: at each node, the LLM proposes child categories
-and classifies papers. Input is title+abstract when under the token threshold,
-or title-only when over it. Stops at max depth or when the LLM says CANNOT_SPLIT.
-
-**Parallelism**: After a node's children are created and papers classified,
-all sibling children are expanded concurrently via `ThreadPoolExecutor`
-(configurable `LLM_MAX_WORKERS`, default 4). Each child's subdivision +
-classification involves sequential LLM calls, but siblings at the same depth
-run in parallel threads. This provides up to N× speedup where N is the
-branching factor.
+### Taxonomy Construction
+Iterative LLM-driven process with multi-threaded sibling expansion. At each node, the LLM proposes child categories and classifies papers. Parallelism via `ThreadPoolExecutor` provides up to N&times; speedup where N is the branching factor.
 
 ### Oral Scheduling
-Graph coloring on the session conflict graph (edges = shared authors between
-sessions). Greedy most-constrained-first with DSatur fallback.
+Graph coloring on the session conflict graph (edges = shared authors). Greedy most-constrained-first with DSatur fallback ensures conflict-free parallel sessions.
 
 ### Poster Proximity Layout
-- **Line**: Solved as a TSP variant using nearest-neighbor heuristic +
-  2-opt local search to minimize total dissimilarity between adjacent boards.
-- **Circle** (with right-priority): A 3-step process:
-  1. Standard circular TSP (nearest-neighbor + 2-opt) for initial ordering
-  2. Direction selection: evaluate both clockwise and counterclockwise using a
-     **directional cost function** that sums weighted forward-hop distances
-     (`w1 * dist(i, i+1) + w2 * dist(i, i+2)`), then pick the better direction
-  3. Directional local search: adjacent swaps and Or-opt moves (relocating a
-     single paper to a new position) evaluated with the asymmetric cost function,
-     ensuring the right-side transition quality improves monotonically
-- **Rectangle**: (1) Spectral partitioning (Fiedler vector) to assign papers
-  to rows, (2) TSP within each row for intra-row coherence, (3) TSP on row
-  centroids for inter-row coherence.
-```
+- **Line**: TSP variant with nearest-neighbor + 2-opt for adjacent topic similarity
+- **Circle**: 3-step process with directional cost function for clockwise walking optimization
+- **Rectangle**: Spectral partitioning (Fiedler vector) for row assignment, TSP within and between rows
+
+## Contact
+
+- **Issues**: [GitHub Issues](https://github.com/DaominJi/TaxoConf/issues)
+- **Email**: [daominji@student.rmit.edu.au](mailto:daominji@student.rmit.edu.au)
+
+## License
+
+This project is for academic and research purposes.

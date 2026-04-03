@@ -107,7 +107,9 @@ worst fit.  Each entry MUST reference a real session id and name from the \
 FULL SESSION DIRECTORY above, and include a brief "fit_reason" explaining \
 why that session would be suitable.
 - If you truly believe every paper in every session fits well, return an \
-empty array `[]`, but this should be rare.
+empty array `[]`, but this should be EXTREMELY rare — there are almost \
+always at least 3-5 misplaced papers across a full conference program.
+- Aim to flag roughly 5-10%% of papers as potentially misplaced.
 - Return ONLY the JSON array, no other text."""
 
 
@@ -163,7 +165,8 @@ def _chunk_sessions(sessions_data: list[dict], max_papers_per_chunk: int = 120
 
 
 def _parse_llm_response(raw: str) -> list[dict]:
-    """Extract the JSON array from the LLM response, tolerating code fences."""
+    """Extract flagged papers from the LLM response, tolerating various formats."""
+    import re
     text = raw.strip()
     # Strip markdown code fences
     if text.startswith("```"):
@@ -173,23 +176,55 @@ def _parse_llm_response(raw: str) -> list[dict]:
         text = text[:-3]
     text = text.strip()
 
-    # Try to find a JSON array in the text even if surrounded by other text
-    if not text.startswith("["):
-        start = text.find("[")
-        if start >= 0:
-            # Find the matching closing bracket
-            end = text.rfind("]")
-            if end > start:
-                text = text[start:end + 1]
-
+    # 1. Try direct parse — works for arrays, single objects, etc.
     try:
         result = json.loads(text)
         if isinstance(result, list):
-            return result
-        return []
+            return [r for r in result if isinstance(r, dict) and r.get("paper_id")]
+        if isinstance(result, dict):
+            if result.get("paper_id"):
+                return [result]
+            # Wrapper object with a list key
+            for key in ("flagged_papers", "papers", "results", "flags", "misplaced_papers",
+                        "hard_papers", "flagged", "misplaced"):
+                if key in result and isinstance(result[key], list):
+                    return [r for r in result[key] if isinstance(r, dict) and r.get("paper_id")]
+            # If the dict has any list values containing paper_id dicts, use the first one
+            for key, val in result.items():
+                if isinstance(val, list) and val and isinstance(val[0], dict) and val[0].get("paper_id"):
+                    logger.info(f"  Found flagged papers under unexpected key '{key}'")
+                    return [r for r in val if isinstance(r, dict) and r.get("paper_id")]
     except json.JSONDecodeError:
-        logger.warning(f"LLM session review returned invalid JSON: {text[:200]}...")
-        return []
+        pass
+
+    # 2. Try extracting a top-level JSON array (skip brackets inside string values)
+    #    Find the first '[' that isn't preceded by ': "' context (heuristic)
+    arr_start = text.find("[")
+    if arr_start == 0 or (arr_start > 0 and text[arr_start - 1] in ("\n", " ", ",")):
+        arr_end = text.rfind("]")
+        if arr_end > arr_start:
+            try:
+                result = json.loads(text[arr_start:arr_end + 1])
+                if isinstance(result, list):
+                    return [r for r in result if isinstance(r, dict) and r.get("paper_id")]
+            except json.JSONDecodeError:
+                pass
+
+    # 3. Regex fallback: find all {...} objects containing "paper_id"
+    objects = re.findall(r'\{[^{}]*"paper_id"[^{}]*\}', text)
+    results = []
+    for obj_str in objects:
+        try:
+            obj = json.loads(obj_str)
+            if isinstance(obj, dict) and obj.get("paper_id"):
+                results.append(obj)
+        except json.JSONDecodeError:
+            continue
+    if results:
+        return results
+
+    logger.warning(f"LLM session review returned unparseable response: {text[:200]}...")
+    return []
 
 
 def review_sessions(llm, sessions_data: list[dict],
@@ -260,6 +295,9 @@ def review_sessions(llm, sessions_data: list[dict],
                         f"{response[:500]}")
             flags = _parse_llm_response(response)
             logger.info(f"  Chunk {i + 1} parsed: {len(flags)} flagged paper(s)")
+            if not flags and len(response.strip()) > 5:
+                logger.warning(f"  Chunk {i + 1}: LLM returned non-empty response but parser found 0 flags. "
+                               f"Response starts with: {response.strip()[:100]!r}")
             raw_flags.extend(flags)
         except Exception as e:
             logger.error(f"LLM session review chunk {i + 1} failed: {e}")
@@ -275,9 +313,15 @@ def review_sessions(llm, sessions_data: list[dict],
         if sid:
             valid_sids.add(sid)
 
+    logger.info(f"  raw_flags count: {len(raw_flags)}, "
+                f"first flag keys: {list(raw_flags[0].keys()) if raw_flags else '(empty)'}")
     for flag in raw_flags:
         pid = str(flag.get("paper_id", ""))
-        if not pid or pid in seen_ids:
+        if not pid:
+            logger.warning(f"  Skipping flag with empty paper_id: {flag}")
+            continue
+        if pid in seen_ids:
+            logger.debug(f"  Skipping duplicate paper_id: {pid}")
             continue
         seen_ids.add(pid)
 

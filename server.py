@@ -77,49 +77,61 @@ def discover_conferences() -> list[str]:
     return conferences
 
 
-def load_conference_papers(conference: str) -> list[Paper]:
-    """Load papers from a conference data directory."""
-    conf_dir = DATA_DIR / conference
-    if not conf_dir.is_dir():
-        raise ValueError(f"Conference directory not found: {conf_dir}")
+def _resolve_paper_file(conf_dir: Path) -> Path:
+    """Resolve the paper JSON file for a workspace.
 
-    # Find the papers JSON file
-    json_files = list(conf_dir.glob("*.json"))
-    if not json_files:
-        raise ValueError(f"No JSON files in {conf_dir}")
+    Resolution order:
+    1. workspace.json → "papers" path (explicit)
+    2. papers.json in the workspace root (convention)
+    3. Legacy fallback: first non-system JSON in root directory
+    """
+    ws_json = conf_dir / "workspace.json"
+    if ws_json.is_file():
+        try:
+            with open(ws_json) as f:
+                meta = json.load(f)
+            if meta.get("papers"):
+                explicit = conf_dir / meta["papers"]
+                if explicit.is_file():
+                    return explicit
+        except Exception:
+            pass
 
-    # Try to find the main paper file (prefer *Full_Papers*.json, else first json)
-    # Skip known non-paper JSON files
-    _SKIP_NAMES = {"metadata", "workspace", "token_usage"}
-    paper_file = None
-    for f in json_files:
+    # Convention: papers.json
+    papers_file = conf_dir / "papers.json"
+    if papers_file.is_file():
+        return papers_file
+
+    # Legacy fallback: first non-system JSON in root
+    _SKIP_NAMES = {"metadata", "workspace", "token_usage", "oral_progress", "poster_progress"}
+    for f in sorted(conf_dir.glob("*.json")):
         if not any(skip in f.name.lower() for skip in _SKIP_NAMES):
-            paper_file = f
-            break
-    if paper_file is None:
-        paper_file = json_files[0]
+            return f
 
-    # Also look for a companion metadata file for abstracts
-    abstract_lookup: dict[str, str] = {}
-    for f in json_files:
-        if "metadata" in f.name.lower():
-            try:
-                with open(f) as mf:
-                    meta = json.load(mf)
-                for m in meta:
-                    if m.get("abstract"):
-                        abstract_lookup[m["title"]] = m["abstract"]
-                logger.info(f"Loaded {len(abstract_lookup)} abstracts from {f.name}")
-            except Exception:
-                pass
-            break
+    raise ValueError(f"No paper data found in {conf_dir}")
 
+
+def _parse_papers_json(paper_file: Path) -> list[Paper]:
+    """Parse a paper JSON file into Paper objects."""
     with open(paper_file) as f:
         data = json.load(f)
 
+    # Also look for a companion metadata file for abstracts
+    abstract_lookup: dict[str, str] = {}
+    meta_file = paper_file.parent / "metadata.json"
+    if meta_file.is_file():
+        try:
+            with open(meta_file) as mf:
+                meta = json.load(mf)
+            for m in meta:
+                if m.get("abstract"):
+                    abstract_lookup[m["title"]] = m["abstract"]
+        except Exception:
+            pass
+
     papers = []
     for e in data:
-        paper_id = str(e["id"])
+        paper_id = str(e.get("id", e.get("paper_id", "")))
         raw_authors = e.get("authors", [])
         if isinstance(raw_authors, str):
             authors = [a.strip() for a in raw_authors.split(",") if a.strip()]
@@ -135,6 +147,27 @@ def load_conference_papers(conference: str) -> list[Paper]:
     return papers
 
 
+def load_conference_papers(conference: str) -> list[Paper]:
+    """Load papers from a workspace directory."""
+    conf_dir = DATA_DIR / conference
+    if not conf_dir.is_dir():
+        raise ValueError(f"Conference directory not found: {conf_dir}")
+    paper_file = _resolve_paper_file(conf_dir)
+    return _parse_papers_json(paper_file)
+
+
+def get_workspace_mode(conference: str) -> str:
+    """Read the mode (oral/poster) from workspace.json. Defaults to 'oral'."""
+    ws_json = DATA_DIR / conference / "workspace.json"
+    if ws_json.is_file():
+        try:
+            with open(ws_json) as f:
+                return json.load(f).get("mode", "oral")
+        except Exception:
+            pass
+    return "oral"
+
+
 # ── Caches ──
 
 _paper_cache: dict[str, list[Paper]] = {}
@@ -142,7 +175,7 @@ _taxonomy_cache: dict[str, TaxonomyNode] = {}
 _similarity_cache: dict[str, SimilarityEngine] = {}
 
 
-def get_papers(conference: str) -> list[Paper]:
+def get_papers(conference: str, mode: str = "oral") -> list[Paper]:
     if conference not in _paper_cache:
         _paper_cache[conference] = load_conference_papers(conference)
     return _paper_cache[conference]
@@ -499,6 +532,177 @@ async def oral_run(request: Request):
     except Exception as e:
         logger.error(f"oral/run error: {e}\n{traceback.format_exc()}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Excel export ─────────────────────────────────────────────────────
+
+@app.post("/api/{mode}/export-excel")
+async def export_excel(mode: str, request: Request):
+    """Export session schedule to Excel using the template."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+    try:
+        import openpyxl
+        from io import BytesIO
+
+        body = await request.json()
+        sessions = body.get("sessions", [])
+        track_names = body.get("trackNames", [])
+
+        template_path = PROJECT_ROOT / "template" / "excel_template.xlsx"
+        if not template_path.is_file():
+            return JSONResponse({"error": "Excel template not found"}, status_code=404)
+
+        wb = openpyxl.load_workbook(str(template_path))
+        ws = wb["Agenda"]
+
+        row = 25  # Start data at row 25
+        for session in sessions:
+            s_date = session.get("sessionDate", "")
+            s_start = session.get("startTime", "")
+            s_end = session.get("endTime", "")
+            s_track_idx = session.get("track", 0)
+            s_track_name = ""
+            if track_names and 0 < s_track_idx <= len(track_names):
+                s_track_name = track_names[s_track_idx - 1]
+            elif session.get("trackLabel"):
+                s_track_name = session["trackLabel"]
+            s_title = session.get("sessionName", "")
+            s_room = session.get("location", "")
+            s_chair = session.get("sessionChair", "")
+
+            # Write session row
+            ws.cell(row=row, column=1, value=s_date)       # Date
+            ws.cell(row=row, column=2, value=s_start)      # Time Start
+            ws.cell(row=row, column=3, value=s_end)        # Time End
+            ws.cell(row=row, column=4, value=s_track_name) # Tracks
+            ws.cell(row=row, column=5, value=s_title)      # Session Title
+            ws.cell(row=row, column=6, value=s_room)       # Room/Location
+            ws.cell(row=row, column=7, value="")           # Description (empty)
+            ws.cell(row=row, column=8, value=s_chair)      # Speakers (chair)
+            ws.cell(row=row, column=9, value="")           # Authors (empty)
+            ws.cell(row=row, column=10, value="")          # Session/Sub (empty)
+            row += 1
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        from starlette.responses import Response
+        filename = f"{mode}_schedule.xlsx"
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except ImportError:
+        return JSONResponse(
+            {"error": "openpyxl is required for Excel export. Install with: pip install openpyxl"},
+            status_code=500,
+        )
+    except Exception as e:
+        logger.error(f"{mode}/export-excel error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Progress save/load (oral + poster, with named saves) ────────────
+
+import re as _re
+
+
+def _safe_save_name(name: str) -> str:
+    """Sanitize a save name for use as a filename component."""
+    name = _re.sub(r'[^\w\-]', '_', name.strip())[:60]
+    return name or "default"
+
+
+def _progress_dir(conf: str, mode: str) -> Path:
+    d = PROJECT_ROOT / "data" / conf / f"{mode}_progress"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.get("/api/{mode}/progress/list")
+async def list_progress_saves(mode: str, conference: str = Query("SIGIR25")):
+    """List all named saves for a mode (oral/poster)."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+    try:
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        d = _progress_dir(conf, mode)
+        saves = []
+        for f in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            saves.append({
+                "name": f.stem,
+                "modified": f.stat().st_mtime,
+                "size": f.stat().st_size,
+            })
+        # Also check legacy single-file progress
+        legacy = PROJECT_ROOT / "data" / conf / f"{mode}_progress.json"
+        if legacy.is_file() and not (d / "default.json").is_file():
+            saves.insert(0, {
+                "name": "default (legacy)",
+                "modified": legacy.stat().st_mtime,
+                "size": legacy.stat().st_size,
+            })
+        return {"success": True, "saves": saves}
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/{mode}/progress")
+async def save_progress(mode: str, request: Request):
+    """Save progress with an optional name."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+    try:
+        body = await request.json()
+        conference = body.get("conference", "SIGIR25")
+        result_data = body.get("result")
+        save_name = _safe_save_name(body.get("name", "default"))
+        if not result_data:
+            return {"success": False, "error": "No result data provided"}
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        d = _progress_dir(conf, mode)
+        path = d / f"{save_name}.json"
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(result_data, f, ensure_ascii=False, indent=2)
+        logger.info(f"{mode} progress saved: {path}")
+        return {"success": True, "path": str(path), "name": save_name}
+    except Exception as e:
+        logger.error(f"{mode}/progress save error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/{mode}/progress")
+async def load_progress(mode: str, conference: str = Query("SIGIR25"),
+                        name: str = Query("default")):
+    """Load a named progress save."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+    try:
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        save_name = _safe_save_name(name)
+        d = _progress_dir(conf, mode)
+        path = d / f"{save_name}.json"
+        # Fall back to legacy single-file if named file doesn't exist
+        if not path.is_file():
+            legacy = PROJECT_ROOT / "data" / conf / f"{mode}_progress.json"
+            if legacy.is_file():
+                path = legacy
+            else:
+                return {"success": False, "error": f"No save named '{save_name}' found"}
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            result_data = json.load(f)
+        return {"success": True, "result": result_data, "name": save_name}
+    except Exception as e:
+        logger.error(f"{mode}/progress load error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -892,10 +1096,15 @@ async def create_workspace(request: Request):
     ws_dir.mkdir(parents=True, exist_ok=True)
 
     import datetime
+    mode = body.get("mode", "oral")
+    if mode not in ("oral", "poster"):
+        mode = "oral"
+
     meta = {
         "name": safe_name,
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "description": body.get("description", ""),
+        "mode": mode,
         "paper_count": 0,
     }
     with open(ws_dir / "workspace.json", "w") as fh:
@@ -937,20 +1146,19 @@ async def get_workspace(name: str):
 
 @app.post("/api/workspaces/{name}/upload")
 async def upload_workspace_papers(name: str, request: Request):
-    """Upload a paper JSON file to a workspace."""
+    """Upload a paper JSON file to a workspace. Saved as papers.json."""
     ws_dir = DATA_DIR / name
     if not ws_dir.is_dir():
         return JSONResponse({"error": f"Workspace '{name}' not found."}, status_code=404)
 
     body = await request.json()
     papers = body.get("papers", [])
-    filename = body.get("filename", f"{name}_papers.json")
 
     if not papers or not isinstance(papers, list):
         return JSONResponse({"error": "Invalid papers data. Expected a JSON array."}, status_code=400)
 
-    # Save papers file
-    out_path = ws_dir / filename
+    # Save as papers.json in the workspace root
+    out_path = ws_dir / "papers.json"
     with open(out_path, "w") as fh:
         json.dump(papers, fh, indent=2)
 
@@ -962,17 +1170,19 @@ async def upload_workspace_papers(name: str, request: Request):
             meta = json.load(fh)
     except Exception:
         meta = {"name": name}
+    meta["papers"] = "papers.json"
     meta["paper_count"] = len(papers)
     with open(ws_json, "w") as fh:
         json.dump(meta, fh, indent=2)
 
-    # Clear paper cache so next load picks up new data
-    _paper_cache.pop(name, None)
+    # Clear caches for this mode
+    _paper_cache.pop(f"{name}_oral", None)
+    _paper_cache.pop(f"{name}_poster", None)
     _taxonomy_cache.pop(name, None)
     _similarity_cache.pop(name, None)
 
-    logger.info(f"Uploaded {len(papers)} papers to workspace '{name}' as '{filename}'")
-    return {"success": True, "paper_count": len(papers), "filename": filename}
+    logger.info(f"Uploaded {len(papers)} papers to workspace '{name}'")
+    return {"success": True, "paper_count": len(papers)}
 
 
 @app.delete("/api/workspaces/{name}")
@@ -1361,9 +1571,15 @@ async def test_llm_connection(request: Request):
 @app.get("/{filepath:path}")
 async def serve_static(filepath: str):
     """Serve static assets (CSS, JS, images). Registered last so API routes win."""
-    full_path = PROJECT_ROOT / filepath
+    # Strip query strings (e.g. ?v=2 cache busting)
+    clean_path = filepath.split("?")[0] if "?" in filepath else filepath
+    full_path = PROJECT_ROOT / clean_path
     if full_path.is_file() and full_path.suffix in STATIC_EXTENSIONS:
-        return FileResponse(str(full_path))
+        resp = FileResponse(str(full_path))
+        # Prevent aggressive caching of JS/CSS during development
+        if full_path.suffix in (".js", ".css"):
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
     return JSONResponse({"error": "Not found"}, status_code=404)
 
 

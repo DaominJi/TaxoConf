@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
 import {
   submissionDist,
   similarity,
@@ -33,6 +33,122 @@ import {
   exportSummaryChip,
   exportMetaCard,
 } from "../export-template.js";
+import { collapseSetupPanel, updateSetupSummary } from "../router.js";
+import { onWorkspaceSwitch } from "../workspace.js";
+import { showToast } from "../toast.js";
+
+/* ═══════════════════ Save / restore progress ═══════════════════ */
+
+function localStorageKey() {
+  return `taxoconf_poster_progress_${state.poster.conference || "default"}`;
+}
+
+function autoSavePosterProgress() {
+  try {
+    const result = state.poster.result;
+    if (!result) return;
+    localStorage.setItem(localStorageKey(), JSON.stringify(result));
+  } catch (_) {}
+}
+
+function getLocalSavedProgress() {
+  try {
+    const raw = localStorage.getItem(localStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+function clearLocalSavedProgress() {
+  try { localStorage.removeItem(localStorageKey()); } catch (_) {}
+}
+
+function restoreLocalProgress() {
+  const saved = getLocalSavedProgress();
+  if (!saved) return false;
+  state.poster.result = saved;
+  renderPosterResults();
+  return true;
+}
+
+/** Open a modal to save poster progress with a name. */
+export function openPosterSaveModal() {
+  if (!state.poster.result) { alert("No poster result to save."); return; }
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Save Poster Session Progress";
+  body.innerHTML = `
+    <div class="control-group">
+      <label class="control-label">Save Name</label>
+      <input id="progressSaveNameInput" type="text" value="poster_${new Date().toISOString().slice(0, 10)}" placeholder="Enter a name for this save">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="progressSaveConfirmBtn" type="button">Save</button>
+    </div>
+  `;
+  body.querySelector("#progressSaveConfirmBtn").addEventListener("click", async () => {
+    const name = body.querySelector("#progressSaveNameInput").value.trim();
+    if (!name) return;
+    try {
+      const resp = await apiPost("/poster/progress", { conference: state.poster.conference, result: state.poster.result, name });
+      if (resp.success) showToast("Saved as \\u201c" + (resp.name || name) + "\\u201d.");
+      else alert("Failed: " + (resp.error || "Unknown error"));
+    } catch (e) { alert("Save failed: " + e.message); }
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+  });
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+/** Open a modal to load poster progress from a list of saves. */
+export async function openPosterLoadModal() {
+  const modal = document.getElementById("progressModal");
+  const title = document.getElementById("progressModalTitle");
+  const body = document.getElementById("progressModalBody");
+  title.textContent = "Load Poster Session Progress";
+  body.innerHTML = `<div class="tiny">Loading saved sessions...</div>`;
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  try {
+    const listResp = await apiGet(`/poster/progress/list?conference=${encodeURIComponent(state.poster.conference)}`);
+    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
+      body.innerHTML = `<div class="tiny">No saved progress found for this conference.</div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div class="tiny" style="margin-bottom:10px">Select a save to load:</div>
+      <div class="progress-save-list">
+        ${listResp.saves.map((s) => {
+          const date = new Date(s.modified * 1000).toLocaleString();
+          const name = s.name.replace(" (legacy)", "");
+          return `<button class="progress-save-item" data-save-name="${escapeHtml(name)}" type="button">
+            <strong>${escapeHtml(s.name)}</strong>
+            <span>${date}</span>
+          </button>`;
+        }).join("")}
+      </div>
+    `;
+    body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-save-name]");
+      if (!btn) return;
+      const name = btn.dataset.saveName;
+      try {
+        const resp = await apiGet(`/poster/progress?conference=${encodeURIComponent(state.poster.conference)}&name=${encodeURIComponent(name)}`);
+        if (resp.success && resp.result) {
+          state.poster.result = resp.result;
+          autoSavePosterProgress();
+          renderPosterResults();
+          showToast("Loaded \\u201c" + name + "\\u201d.");
+        } else { showToast("Failed to load."); }
+      } catch (err) { alert("Load failed: " + err.message); }
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+    }, { once: true });
+  } catch (e) {
+    body.innerHTML = `<div class="tiny" style="color:var(--danger)">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
 
@@ -73,9 +189,8 @@ function setPosterSessionFields(sessionId, fields) {
     endTime: String(fields.endTime || "").trim(),
     trackLabel: String(fields.trackLabel || "").trim(),
     location: String(fields.location || "").trim(),
-    speakers: String(fields.speakers || "").trim(),
-    description: String(fields.description || "").trim(),
   });
+  autoSavePosterProgress();
   renderPosterResults();
 }
 
@@ -361,12 +476,10 @@ export function renderPosterCapacityNotice() {
   const totalCapacity = sessionCap * state.poster.sessionCount;
 
   sourceStatus.innerHTML = `
-    conference: <span class="mono">${escapeHtml(state.poster.demoInfo.conference || state.poster.conference)}</span><br>
-    papers: <span class="mono">${paperCount}</span><br>
-    unique presenters: <span class="mono">${state.poster.demoInfo.presenterCount}</span><br>
-    repeated presenters: <span class="mono">${state.poster.demoInfo.multiPresenterCount}</span><br>
-    paper data: <span class="mono">${state.poster.demoInfo.paperDataPath}</span><br>
-    similarity matrix: <span class="mono">${state.poster.demoInfo.similarityMatrixPath}</span>
+    Conference: <span class="mono">${escapeHtml(state.poster.demoInfo.conference || state.poster.conference)}</span><br>
+    Papers: <span class="mono">${paperCount}</span><br>
+    Unique authors: <span class="mono">${state.poster.demoInfo.presenterCount}</span><br>
+    Authors with multiple papers: <span class="mono">${state.poster.demoInfo.multiPresenterCount}</span>
   `;
 
   const issues = [];
@@ -444,6 +557,14 @@ export async function runPosterOrganization() {
     state.poster.optimizeWithinLayout = Boolean(state.poster.result && state.poster.result.optimizeWithinLayout);
     state.poster.activeSessionId = null;
     state.poster.activeHardPaperId = null;
+    /* Auto-collapse setup panel + sidebar, show summary */
+    const r = state.poster.result;
+    const sessionCount = r.sessions ? r.sessions.length : 0;
+    const totalPapers = r.papers ? r.papers.length : r.sessions ? r.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0) : 0;
+    updateSetupSummary("posterSummaryChip",
+      `${state.poster.demoInfo?.conference || state.poster.conference} \u00b7 ${totalPapers} papers \u00b7 ${sessionCount} sessions \u00b7 ${state.poster.layoutType} layout`);
+    collapseSetupPanel("posterSetupPanel");
+    document.querySelector(".app")?.classList.add("sidebar-collapsed");
   } catch (err) {
     alert(`Poster organization backend error: ${err.message}`);
   } finally {
@@ -607,8 +728,9 @@ export function renderPosterSessionModal() {
     <div class="paper-move-card">
       <div><strong>Session Metadata</strong></div>
       <div class="tiny" style="margin-top:4px">Edit the generated session title, scheduling fields, location, description, and speaker information used by the export.</div>
+      <div class="tiny" style="margin-top:4px">Edit the session title, chair, scheduling, and location. Time and date changes apply to this session.</div>
       <div class="modal-field-grid">
-        <div class="modal-field">
+        <div class="modal-field modal-field-span">
           <label>Session Name</label>
           <input data-poster-session-name-input="${session.id}" type="text" value="${escapeHtml(session.sessionName || "")}" placeholder="Concise academic session name">
         </div>
@@ -617,32 +739,24 @@ export function renderPosterSessionModal() {
           <input data-poster-session-chair-input="${session.id}" type="text" value="${escapeHtml(session.sessionChair || "")}" placeholder="Leave blank or assign manually">
         </div>
         <div class="modal-field">
-          <label>Date</label>
-          <input data-poster-session-date-input="${session.id}" type="text" value="${escapeHtml(session.sessionDate || "")}" placeholder="e.g. 2025-07-17">
-        </div>
-        <div class="modal-field">
-          <label>Track</label>
+          <label>Track Label</label>
           <input data-poster-session-track-input="${session.id}" type="text" value="${escapeHtml(session.trackLabel || "")}" placeholder="Optional track label">
         </div>
         <div class="modal-field">
+          <label>Date</label>
+          <input data-poster-session-date-input="${session.id}" type="date" value="${escapeHtml(session.sessionDate || "")}">
+        </div>
+        <div class="modal-field">
           <label>Start Time</label>
-          <input data-poster-session-start-input="${session.id}" type="text" value="${escapeHtml(session.startTime || "")}" placeholder="e.g. 14:00">
+          <input data-poster-session-start-input="${session.id}" type="time" value="${escapeHtml(session.startTime || "")}">
         </div>
         <div class="modal-field">
           <label>End Time</label>
-          <input data-poster-session-end-input="${session.id}" type="text" value="${escapeHtml(session.endTime || "")}" placeholder="e.g. 15:30">
+          <input data-poster-session-end-input="${session.id}" type="time" value="${escapeHtml(session.endTime || "")}">
         </div>
         <div class="modal-field">
           <label>Room / Location</label>
           <input data-poster-session-location-input="${session.id}" type="text" value="${escapeHtml(session.location || "")}" placeholder="Optional room or venue">
-        </div>
-        <div class="modal-field">
-          <label>Speakers</label>
-          <input data-poster-session-speakers-input="${session.id}" type="text" value="${escapeHtml(session.speakers || "")}" placeholder="Optional speakers">
-        </div>
-        <div class="modal-field modal-field-span">
-          <label>Description</label>
-          <textarea data-poster-session-description-input="${session.id}" rows="3" placeholder="Optional session description">${escapeHtml(session.description || "")}</textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -657,7 +771,7 @@ export function renderPosterSessionModal() {
         return `
           <div class="paper-move-card">
             <div><strong>${escapeHtml(posterPaperId(paper))}</strong> - ${escapeHtml(paper.title || "")}</div>
-            <div class="tiny" style="margin-top:4px">Presenter: ${escapeHtml(posterPresentersLabel(paper))}</div>
+            <div class="tiny" style="margin-top:4px">Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</div>
             <div class="tiny">Current board: ${place ? escapeHtml(posterBoardLabel(place.cellIndex, result.layoutType, result.rows, result.cols)) : "N/A"}</div>
             <div class="paper-move-row">
               <div class="tiny">Target session</div>
@@ -676,8 +790,9 @@ export function renderPosterSessionModal() {
     </div>
   `;
 
-  /* Event delegation */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._posterSessionHandler) body.removeEventListener("click", body._posterSessionHandler);
+  body._posterSessionHandler = (e) => {
     const openBtn = e.target.closest("button[data-action='open-poster-session']");
     if (openBtn) {
       openPosterSessionModal(openBtn.getAttribute("data-session-id"));
@@ -708,11 +823,10 @@ export function renderPosterSessionModal() {
         startTime: body.querySelector(`input[data-poster-session-start-input="${sid}"]`)?.value || "",
         endTime: body.querySelector(`input[data-poster-session-end-input="${sid}"]`)?.value || "",
         location: body.querySelector(`input[data-poster-session-location-input="${sid}"]`)?.value || "",
-        speakers: body.querySelector(`input[data-poster-session-speakers-input="${sid}"]`)?.value || "",
-        description: body.querySelector(`textarea[data-poster-session-description-input="${sid}"]`)?.value || "",
       });
     }
-  });
+  };
+  body.addEventListener("click", body._posterSessionHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
@@ -783,8 +897,9 @@ export function renderPosterHardPaperModal() {
     </div>
   `;
 
-  /* Event delegation */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._posterHardPaperHandler) body.removeEventListener("click", body._posterHardPaperHandler);
+  body._posterHardPaperHandler = (e) => {
     const applyBtn = e.target.closest("button[data-action='apply-poster-hard-paper']");
     if (applyBtn) {
       const currentPaperId = applyBtn.getAttribute("data-paper-id");
@@ -805,7 +920,8 @@ export function renderPosterHardPaperModal() {
       closePosterHardPaperModal();
       openPosterSessionModal(sid);
     }
-  });
+  };
+  body.addEventListener("click", body._posterHardPaperHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
@@ -866,9 +982,8 @@ export function renderPosterResults() {
     <div class="poster-grid-shell">
       <div class="poster-session-grid">
         ${result.sessions.map((session) => {
-          const topTopicNames = sessionTopicNames(session.papers, posterPaperDist, 2);
           const metaText = [
-            `${posterSessionLabel(session.id)} \u00b7 ${session.papers.length} papers \u00b7 ${topTopicNames}`,
+            `${posterSessionLabel(session.id)} \u00b7 ${session.papers.length} papers`,
             sessionTimeLabel(session) ? sessionTimeLabel(session) : "",
             session.location ? `Location: ${session.location}` : "",
           ].filter(Boolean).join(" \u00b7 ");
@@ -965,22 +1080,31 @@ export function buildPosterExportHtml() {
       </tr>
     `);
   }
-  const sections = result.sessions.map((session) => `
+  const sessionAnchors = result.sessions.map(s => posterSessionAnchorId(s));
+  const sections = result.sessions.map((session, sIdx) => {
+    const prevAnchor = sIdx > 0 ? sessionAnchors[sIdx - 1] : null;
+    const nextAnchor = sIdx < result.sessions.length - 1 ? sessionAnchors[sIdx + 1] : null;
+    const navLinks = [
+      `<a href="#top">\u2191 Overview</a>`,
+      prevAnchor ? `<a href="#${prevAnchor}">\u2190 Prev</a>` : "",
+      nextAnchor ? `<a href="#${nextAnchor}">Next \u2192</a>` : "",
+    ].filter(Boolean).join("");
+
+    return `
     <section id="${posterSessionAnchorId(session)}" class="session-card">
       <div class="session-head">
         <div>
           <h3>${escapeHtml(posterSessionName(session))}</h3>
-          <div class="session-kicker">${escapeHtml(posterSessionLabel(session.id))} \u00b7 ${escapeHtml(result.layoutType)}</div>
+          <div class="session-kicker">${escapeHtml(posterSessionLabel(session.id))} \u00b7 ${escapeHtml(result.layoutType)} \u00b7 ${session.papers.length} papers</div>
         </div>
-        <a class="back-link" href="#top">Back to overview</a>
+        <div class="session-nav">${navLinks}</div>
       </div>
       <div class="meta-grid">
         ${exportMetaCard("Date", session.sessionDate)}
         ${exportMetaCard("Time", sessionTimeLabel(session))}
         ${exportMetaCard("Track", session.trackLabel || posterSessionLabel(session.id))}
         ${exportMetaCard("Room / Location", session.location)}
-        ${exportMetaCard("Speakers / Chair", sessionSpeakersChairLabel(session))}
-        ${exportMetaCard("Description", session.description)}
+        ${exportMetaCard("Chair", session.sessionChair)}
       </div>
       <div class="paper-list">
         ${(session.cells || []).map((paper, idx) => {
@@ -989,30 +1113,33 @@ export function buildPosterExportHtml() {
             return `
               <div class="paper-item">
                 <strong>${escapeHtml(label)}</strong>
-                <span>Empty board</span>
+                <span class="paper-authors">Empty board</span>
               </div>
             `;
           }
           return `
             <div class="paper-item">
               <strong>${escapeHtml(label)} \u00b7 ${escapeHtml(posterPaperId(paper))} \u00b7 ${escapeHtml(paper.title || "")}</strong>
-              <span>Presenters: ${escapeHtml(posterPresentersLabel(paper))}</span>
-              <span>Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+              <span class="paper-authors">Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</span>
+              ${paper.abstract ? `<details><summary>Show abstract</summary><div class="paper-abstract">${escapeHtml(paper.abstract)}</div></details>` : ""}
             </div>
           `;
         }).join("")}
       </div>
-    </section>
-  `).join("");
+    </section>`;
+  }).join("");
+
+  const totalPapers = result.papers ? result.papers.length : result.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0);
   const summaryHtml = [
-    exportSummaryChip("Papers", result.papers.length),
+    exportSummaryChip("Papers", totalPapers),
     exportSummaryChip("Sessions", result.sessions.length),
     exportSummaryChip("Layout", result.layoutType),
     exportSummaryChip("Boards / Session", result.sessionCapacity),
   ].join("");
   return buildStyledExportHtml({
     title: "Poster Session Schedule",
-    subtitle: "A styled poster-session export with linked overview and session detail cards.",
+    subtitle: `${result.sessions.length} poster sessions using ${escapeHtml(result.layoutType)} layout with ${result.sessionCapacity} boards per session.`,
+    conference: state.poster.conference,
     summaryHtml,
     headerHtml: `<tr>${Array.from({ length: columns }, (_, idx) => `<th>Column ${idx + 1}</th>`).join("")}</tr>`,
     rowsHtml: rows.join(""),
@@ -1024,18 +1151,19 @@ export function buildPosterExportCsv() {
   const result = state.poster.result;
   if (!result) return "";
   const rows = [[
-    "Date",
-    "Time Start",
-    "Time End",
+    "*Date",
+    "*Time Start",
+    "*Time End",
     "Tracks",
-    "Session Title",
+    "*Session Title",
     "Room/Location",
     "Description",
-    "Speakers/Session Chair",
+    "Speakers",
     "Authors",
     "Session or Sub-session(Sub)",
   ]];
   result.sessions.forEach((session) => {
+    ensureSessionMetadata(session);
     rows.push([
       session.sessionDate || "",
       session.startTime || "",
@@ -1043,26 +1171,11 @@ export function buildPosterExportCsv() {
       session.trackLabel || "",
       posterSessionName(session),
       session.location || "",
-      session.description || "",
-      sessionSpeakersChairLabel(session) || "",
       "",
-      "Session",
+      session.sessionChair || "",
+      "",
+      "",
     ]);
-    (session.cells || []).forEach((paper, idx) => {
-      if (!paper) return;
-      rows.push([
-        session.sessionDate || "",
-        session.startTime || "",
-        session.endTime || "",
-        session.trackLabel || "",
-        paper.title || posterPaperId(paper),
-        session.location || "",
-        `${posterPaperId(paper)} | ${posterBoardLabel(idx, result.layoutType, result.rows, result.cols)}`,
-        posterPresentersLabel(paper),
-        paperAuthorsOrPresentersLabel(paper),
-        "Sub",
-      ]);
-    });
   });
   return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
 }
@@ -1071,11 +1184,16 @@ export function buildPosterExportCsv() {
 
 export function setupPosterEvents() {
   document.getElementById("runPosterBtn").addEventListener("click", runPosterOrganization);
+  document.getElementById("savePosterProgressBtn").addEventListener("click", openPosterSaveModal);
+  document.getElementById("loadPosterProgressBtn").addEventListener("click", openPosterLoadModal);
   document.getElementById("posterConferenceSelect").addEventListener("change", (e) => {
     state.poster.conference = e.target.value;
     state.poster.result = null;
     state.poster.activeSessionId = null;
     state.poster.activeHardPaperId = null;
+    /* Sync sidebar workspace select */
+    const wsSel = document.getElementById("workspaceSelect");
+    if (wsSel) wsSel.value = e.target.value;
     void loadPosterDemoInfo();
   });
   const posterInputHandler = () => {
@@ -1099,16 +1217,41 @@ export function setupPosterEvents() {
     document.getElementById(id).addEventListener("input", posterInputHandler);
     document.getElementById(id).addEventListener("change", posterInputHandler);
   });
-  document.getElementById("posterViewModeSelect").addEventListener("change", (e) => {
-    state.poster.detailMode = e.target.value === "detailed" ? "detailed" : "concise";
-    renderPosterResults();
-  });
-  document.getElementById("exportPosterBtn").addEventListener("click", () => {
+  document.getElementById("exportPosterBtn").addEventListener("click", async () => {
     if (!state.poster.result) {
       alert("Run poster organization first.");
       return;
     }
     const format = document.getElementById("posterExportFormatSelect").value;
+    if (format === "excel") {
+      try {
+        const result = state.poster.result;
+        const resp = await fetch(`${API_BASE}/poster/export-excel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessions: result.sessions.map((s) => ({
+              sessionName: s.sessionName || "",
+              sessionChair: s.sessionChair || "",
+              sessionDate: s.sessionDate || "",
+              startTime: s.startTime || "",
+              endTime: s.endTime || "",
+              trackLabel: s.trackLabel || "",
+              track: s.track || 0,
+              location: s.location || "",
+            })),
+            trackNames: result.trackNames || [],
+          }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "poster_schedule.xlsx"; a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) { alert("Excel export failed: " + e.message); }
+      return;
+    }
     if (format === "csv") {
       downloadFile("poster_session_schedule.csv", buildPosterExportCsv(), "text/csv;charset=utf-8");
       return;
@@ -1122,5 +1265,14 @@ export function setupPosterEvents() {
   document.getElementById("posterHardPaperModalClose").addEventListener("click", closePosterHardPaperModal);
   document.getElementById("posterHardPaperModal").addEventListener("click", (e) => {
     if (e.target.id === "posterHardPaperModal") closePosterHardPaperModal();
+  });
+
+  /* Reload poster data when workspace changes */
+  onWorkspaceSwitch(() => {
+    state.poster.result = null;
+    state.poster.activeSessionId = null;
+    state.poster.activeHardPaperId = null;
+    void loadPosterDemoInfo();
+    renderPosterResults();
   });
 }
