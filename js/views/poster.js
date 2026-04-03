@@ -90,35 +90,43 @@ export async function savePosterProgressToServer() {
   }
 }
 
-export async function loadPosterProgressFromServer() {
+/** Refresh the load-progress dropdown with available saves from server. */
+export async function refreshPosterProgressList() {
+  const sel = document.getElementById("loadPosterProgressSelect");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Load Progress...</option>`;
   try {
     const listResp = await apiGet(`/poster/progress/list?conference=${encodeURIComponent(state.poster.conference)}`);
-    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
-      showToast("No saved progress found on server.");
-      return false;
+    if (listResp.success && listResp.saves && listResp.saves.length > 0) {
+      listResp.saves.forEach((s) => {
+        const date = new Date(s.modified * 1000).toLocaleString();
+        const opt = document.createElement("option");
+        opt.value = s.name.replace(" (legacy)", "");
+        opt.textContent = `${s.name} (${date})`;
+        sel.appendChild(opt);
+      });
     }
-    const saves = listResp.saves;
-    const choices = saves.map((s, i) => `${i + 1}. ${s.name} (${new Date(s.modified * 1000).toLocaleString()})`).join("\n");
-    const pick = prompt(`Available saves:\n${choices}\n\nEnter number to load:`, "1");
-    if (!pick) return false;
-    const idx = parseInt(pick, 10) - 1;
-    if (idx < 0 || idx >= saves.length) { alert("Invalid selection."); return false; }
-    const chosen = saves[idx].name.replace(" (legacy)", "");
+  } catch (_) {}
+}
 
-    const resp = await apiGet(`/poster/progress?conference=${encodeURIComponent(state.poster.conference)}&name=${encodeURIComponent(chosen)}`);
+/** Load a specific named save from the server. */
+async function loadPosterProgressByName(name) {
+  if (!name) return;
+  try {
+    const resp = await apiGet(`/poster/progress?conference=${encodeURIComponent(state.poster.conference)}&name=${encodeURIComponent(name)}`);
     if (resp.success && resp.result) {
       state.poster.result = resp.result;
       autoSavePosterProgress();
       renderPosterResults();
-      showToast(`Loaded "${chosen}".`);
-      return true;
+      showToast(`Loaded "${name}".`);
+    } else {
+      showToast("Failed to load save.");
     }
-    showToast("Failed to load save.");
-    return false;
   } catch (e) {
     alert("Load failed: " + e.message);
-    return false;
   }
+  const sel = document.getElementById("loadPosterProgressSelect");
+  if (sel) sel.value = "";
 }
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
@@ -1165,8 +1173,13 @@ export function buildPosterExportCsv() {
 
 export function setupPosterEvents() {
   document.getElementById("runPosterBtn").addEventListener("click", runPosterOrganization);
-  document.getElementById("savePosterProgressBtn").addEventListener("click", savePosterProgressToServer);
-  document.getElementById("loadPosterProgressBtn").addEventListener("click", loadPosterProgressFromServer);
+  document.getElementById("savePosterProgressBtn").addEventListener("click", async () => {
+    await savePosterProgressToServer();
+    refreshPosterProgressList();
+  });
+  const loadPosterSel = document.getElementById("loadPosterProgressSelect");
+  loadPosterSel.addEventListener("focus", () => refreshPosterProgressList());
+  loadPosterSel.addEventListener("change", (e) => { if (e.target.value) loadPosterProgressByName(e.target.value); });
   document.getElementById("posterConferenceSelect").addEventListener("change", (e) => {
     state.poster.conference = e.target.value;
     state.poster.result = null;

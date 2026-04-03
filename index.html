@@ -322,8 +322,10 @@
               <select id="oralConferenceSelect" title="Conference"></select>
               <button id="runOralBtn" class="btn-primary" type="button">Run</button>
               <button id="exportOralBtn" class="btn-muted" type="button">Export</button>
-              <button id="saveOralProgressBtn" class="btn-muted" type="button">Save Progress</button>
-              <button id="loadOralProgressBtn" class="btn-muted" type="button">Load Progress</button>
+              <button id="saveOralProgressBtn" class="btn-muted" type="button">Save</button>
+              <select id="loadOralProgressSelect" title="Load saved progress" style="font-size:0.78rem;padding:4px 8px;border-radius:8px;border:1px solid var(--line)">
+                <option value="">Load Progress...</option>
+              </select>
               <button class="btn-configure" type="button" data-toggle-setup="oralSetupPanel">Configure <span class="caret">&#9660;</span></button>
             </div>
             <div id="oralRunStatus" class="run-status toolbar-status" aria-live="polite"></div>
@@ -368,14 +370,7 @@
               </div>
 
               <div class="control-card">
-                <h3 style="margin:0 0 8px;font-size:0.9rem">View &amp; Export</h3>
-                <div class="control-group">
-                  <span class="control-label">Schedule View</span>
-                  <select id="oralViewModeSelect">
-                    <option value="concise">Concise</option>
-                    <option value="detailed">Detailed</option>
-                  </select>
-                </div>
+                <h3 style="margin:0 0 8px;font-size:0.9rem">Export</h3>
                 <div class="control-group">
                   <span class="control-label">Export Format</span>
                   <select id="oralExportFormatSelect">
@@ -406,8 +401,10 @@
               <select id="posterConferenceSelect" title="Conference"></select>
               <button id="runPosterBtn" class="btn-primary" type="button">Run</button>
               <button id="exportPosterBtn" class="btn-muted" type="button">Export</button>
-              <button id="savePosterProgressBtn" class="btn-muted" type="button">Save Progress</button>
-              <button id="loadPosterProgressBtn" class="btn-muted" type="button">Load Progress</button>
+              <button id="savePosterProgressBtn" class="btn-muted" type="button">Save</button>
+              <select id="loadPosterProgressSelect" title="Load saved progress" style="font-size:0.78rem;padding:4px 8px;border-radius:8px;border:1px solid var(--line)">
+                <option value="">Load Progress...</option>
+              </select>
               <button class="btn-configure" type="button" data-toggle-setup="posterSetupPanel">Configure <span class="caret">&#9660;</span></button>
             </div>
             <div id="posterRunStatus" class="run-status toolbar-status" aria-live="polite"></div>
@@ -474,14 +471,7 @@
               </div>
 
               <div class="control-card">
-                <h3 style="margin:0 0 8px;font-size:0.9rem">View &amp; Export</h3>
-                <div class="control-group">
-                  <span class="control-label">Schedule View</span>
-                  <select id="posterViewModeSelect">
-                    <option value="concise">Concise</option>
-                    <option value="detailed">Detailed</option>
-                  </select>
-                </div>
+                <h3 style="margin:0 0 8px;font-size:0.9rem">Export</h3>
                 <div class="control-group">
                   <span class="control-label">Export Format</span>
                   <select id="posterExportFormatSelect">
