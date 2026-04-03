@@ -120,14 +120,6 @@ export async function saveSettings() {
       model: document.getElementById("settingsModel").value,
       api_key_source: apiKeySource,
     },
-      enable_conflict_avoidance: document.getElementById("settingsPosterConflict").checked,
-      proximity: document.getElementById("settingsPosterProximity").checked,
-    },
-    similarity: {
-      method: document.getElementById("settingsSimilarity").value,
-      embedding_model: document.getElementById("settingsEmbeddingModel").value,
-      cache_enabled: document.getElementById("settingsEmbeddingCache").checked,
-    },
   };
 
   if (apiKeySource === "manual") {
