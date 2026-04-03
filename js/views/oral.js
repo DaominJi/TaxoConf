@@ -333,12 +333,10 @@ export function renderOralCapacityNotice() {
   const maxCapacity = totalSessions * state.oral.maxPerSession;
 
   sourceStatus.innerHTML = `
-    conference: <span class="mono">${escapeHtml(state.oral.demoInfo.conference || state.oral.conference)}</span><br>
-    papers: <span class="mono">${paperCount}</span><br>
-    unique presenters: <span class="mono">${state.oral.demoInfo.presenterCount}</span><br>
-    repeated presenters: <span class="mono">${state.oral.demoInfo.multiPresenterCount}</span><br>
-    paper data: <span class="mono">${state.oral.demoInfo.paperDataPath}</span><br>
-    similarity matrix: <span class="mono">${state.oral.demoInfo.similarityMatrixPath}</span>
+    Conference: <span class="mono">${escapeHtml(state.oral.demoInfo.conference || state.oral.conference)}</span><br>
+    Papers: <span class="mono">${paperCount}</span><br>
+    Unique authors: <span class="mono">${state.oral.demoInfo.presenterCount}</span><br>
+    Authors with multiple papers: <span class="mono">${state.oral.demoInfo.multiPresenterCount}</span>
   `;
 
   const issues = [];
@@ -412,12 +410,14 @@ export async function runOralOrganization() {
     state.oral.result = prepareOralResult(requireApiResult(resp, "Oral organization"));
     state.oral.activeSessionId = null;
     state.oral.activeHardPaperId = null;
-    /* Auto-collapse setup panel and show summary */
+    /* Auto-collapse setup panel + sidebar, show summary */
     const r = state.oral.result;
     const sessionCount = r.sessions ? r.sessions.length : 0;
-    const paperCount = r.sessions ? r.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0) : 0;
-    updateSetupSummary("oralSummaryChip", `${sessionCount} sessions, ${paperCount} papers, M=${state.oral.parallelSessions} N=${state.oral.timeSlots}`);
+    const totalPapers = r.papers ? r.papers.length : r.sessions ? r.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0) : 0;
+    updateSetupSummary("oralSummaryChip",
+      `${state.oral.demoInfo?.conference || state.oral.conference} \u00b7 ${totalPapers} papers \u00b7 ${sessionCount} sessions \u00b7 ${state.oral.parallelSessions} tracks \u00d7 ${state.oral.timeSlots} slots`);
     collapseSetupPanel("oralSetupPanel");
+    document.querySelector(".app")?.classList.add("sidebar-collapsed");
   } catch (err) {
     alert(`Oral organization backend error: ${err.message}`);
   } finally {

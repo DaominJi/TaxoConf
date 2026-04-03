@@ -30,6 +30,7 @@
       <div class="workspace-switcher">
         <select id="workspaceSelect" title="Current workspace"></select>
         <button class="ws-add-btn" id="wsAddBtn" type="button" title="Create workspace">+</button>
+        <button class="ws-add-btn" id="wsDeleteBtn" type="button" title="Delete workspace" style="background:#fde8e5;color:var(--danger);border-color:#f0c5c0">&times;</button>
       </div>
       <div class="nav-list" role="navigation" aria-label="Task Navigation">
         <button class="nav-btn is-active" data-task="overview" type="button"><span class="nav-icon">&#9776;</span> Overview</button>
@@ -355,6 +356,10 @@
                   <span class="control-label">Min per Session</span>
                   <input id="oralMinInput" type="number" min="1" step="1" value="3">
                 </div>
+                <label class="checkbox-line" style="margin-top:6px">
+                  <input id="oralConflictInput" type="checkbox" checked>
+                  Avoid presenter conflicts across parallel sessions
+                </label>
               </div>
 
               <div class="control-card">
@@ -542,7 +547,7 @@
           <h2>Settings</h2>
           <p class="tiny" style="margin:-6px 0 12px">Configure LLM provider, organization methods, and similarity engine. Changes take effect immediately.</p>
 
-          <!-- Panel 1: LLM Configuration -->
+          <!-- LLM Configuration -->
           <div class="control-card" style="margin-bottom:12px">
             <h3 style="margin:0 0 10px;font-size:0.9rem">LLM Provider &amp; Model</h3>
             <div class="grid-2">
@@ -560,21 +565,15 @@
                 <select id="settingsModel"></select>
               </div>
             </div>
-            <div class="grid-2" style="margin-top:8px">
-              <div class="control-group">
-                <label class="control-label" for="settingsTemp">Temperature</label>
-                <input type="number" id="settingsTemp" min="0" max="2" step="0.1" value="0.3" />
-              </div>
-              <div class="control-group">
-                <label class="control-label">API Key Source</label>
-                <div style="display:flex;gap:12px;align-items:center;margin-top:4px">
-                  <label style="font-size:0.82rem;display:flex;align-items:center;gap:4px;cursor:pointer">
-                    <input type="radio" name="apiKeySource" value="environment" checked /> Environment variable
-                  </label>
-                  <label style="font-size:0.82rem;display:flex;align-items:center;gap:4px;cursor:pointer">
-                    <input type="radio" name="apiKeySource" value="manual" /> Enter manually
-                  </label>
-                </div>
+            <div class="control-group" style="margin-top:8px">
+              <label class="control-label">API Key Source</label>
+              <div style="display:flex;gap:12px;align-items:center;margin-top:4px">
+                <label style="font-size:0.82rem;display:flex;align-items:center;gap:4px;cursor:pointer">
+                  <input type="radio" name="apiKeySource" value="environment" checked /> Environment variable
+                </label>
+                <label style="font-size:0.82rem;display:flex;align-items:center;gap:4px;cursor:pointer">
+                  <input type="radio" name="apiKeySource" value="manual" /> Enter manually
+                </label>
               </div>
             </div>
             <div id="settingsManualKeyRow" style="display:none;margin-top:8px">
@@ -595,90 +594,6 @@
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
               <button class="btn-muted" id="settingsTestLLMBtn" type="button" style="padding:7px 14px;font-size:0.8rem">Test Connection</button>
               <span id="settingsTestResult" class="tiny" style="margin:0"></span>
-            </div>
-          </div>
-
-          <!-- Panel 2: Oral Session Settings -->
-          <div class="control-card" style="margin-bottom:12px">
-            <h3 style="margin:0 0 10px;font-size:0.9rem">Oral Session Organization</h3>
-            <div class="grid-3">
-              <div class="control-group">
-                <label class="control-label" for="settingsOralMethod">Method</label>
-                <select id="settingsOralMethod">
-                  <option value="greedy">Greedy (bottom-up)</option>
-                  <option value="optimization">Optimization (ILP)</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label class="control-label" for="settingsOralSolver">Solver</label>
-                <select id="settingsOralSolver">
-                  <option value="heuristic">Heuristic</option>
-                  <option value="ilp">ILP</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label class="control-label" for="settingsOralAlpha">Similarity weight</label>
-                <input type="number" id="settingsOralAlpha" min="0" max="2" step="0.1" value="1.0" />
-              </div>
-            </div>
-            <div class="toggle-row" style="margin-top:6px">
-              <input type="checkbox" id="settingsOralConflict" checked /> <label for="settingsOralConflict">Enable conflict avoidance</label>
-            </div>
-          </div>
-
-          <!-- Panel 3: Poster Session Settings -->
-          <div class="control-card" style="margin-bottom:12px">
-            <h3 style="margin:0 0 10px;font-size:0.9rem">Poster Session Organization</h3>
-            <div class="grid-3">
-              <div class="control-group">
-                <label class="control-label" for="settingsPosterMethod">Method</label>
-                <select id="settingsPosterMethod">
-                  <option value="greedy">Greedy (bottom-up)</option>
-                  <option value="optimization">Optimization (ILP)</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label class="control-label" for="settingsPosterSolver">Solver</label>
-                <select id="settingsPosterSolver">
-                  <option value="heuristic">Heuristic</option>
-                  <option value="ilp">ILP</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label class="control-label" for="settingsPosterAlpha">Similarity weight</label>
-                <input type="number" id="settingsPosterAlpha" min="0" max="2" step="0.1" value="1.0" />
-              </div>
-            </div>
-            <div style="display:flex;gap:16px;margin-top:6px">
-              <div class="toggle-row">
-                <input type="checkbox" id="settingsPosterConflict" checked /> <label for="settingsPosterConflict">Conflict avoidance</label>
-              </div>
-              <div class="toggle-row">
-                <input type="checkbox" id="settingsPosterProximity" checked /> <label for="settingsPosterProximity">Proximity optimization</label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Panel 4: Embedding & Similarity -->
-          <div class="control-card" style="margin-bottom:12px">
-            <h3 style="margin:0 0 10px;font-size:0.9rem">Similarity &amp; Embedding</h3>
-            <div class="grid-3">
-              <div class="control-group">
-                <label class="control-label" for="settingsSimilarity">Similarity method</label>
-                <select id="settingsSimilarity">
-                  <option value="tfidf">TF-IDF</option>
-                  <option value="transformer">Sentence Transformer</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label class="control-label" for="settingsEmbeddingModel">Embedding model</label>
-                <input type="text" id="settingsEmbeddingModel" placeholder="all-MiniLM-L6-v2" />
-              </div>
-              <div class="control-group" style="display:flex;align-items:end;padding-bottom:4px">
-                <div class="toggle-row">
-                  <input type="checkbox" id="settingsEmbeddingCache" checked /> <label for="settingsEmbeddingCache">Embedding cache</label>
-                </div>
-              </div>
             </div>
           </div>
 

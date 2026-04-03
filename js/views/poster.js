@@ -74,8 +74,6 @@ function setPosterSessionFields(sessionId, fields) {
     endTime: String(fields.endTime || "").trim(),
     trackLabel: String(fields.trackLabel || "").trim(),
     location: String(fields.location || "").trim(),
-    speakers: String(fields.speakers || "").trim(),
-    description: String(fields.description || "").trim(),
   });
   renderPosterResults();
 }
@@ -362,12 +360,10 @@ export function renderPosterCapacityNotice() {
   const totalCapacity = sessionCap * state.poster.sessionCount;
 
   sourceStatus.innerHTML = `
-    conference: <span class="mono">${escapeHtml(state.poster.demoInfo.conference || state.poster.conference)}</span><br>
-    papers: <span class="mono">${paperCount}</span><br>
-    unique presenters: <span class="mono">${state.poster.demoInfo.presenterCount}</span><br>
-    repeated presenters: <span class="mono">${state.poster.demoInfo.multiPresenterCount}</span><br>
-    paper data: <span class="mono">${state.poster.demoInfo.paperDataPath}</span><br>
-    similarity matrix: <span class="mono">${state.poster.demoInfo.similarityMatrixPath}</span>
+    Conference: <span class="mono">${escapeHtml(state.poster.demoInfo.conference || state.poster.conference)}</span><br>
+    Papers: <span class="mono">${paperCount}</span><br>
+    Unique authors: <span class="mono">${state.poster.demoInfo.presenterCount}</span><br>
+    Authors with multiple papers: <span class="mono">${state.poster.demoInfo.multiPresenterCount}</span>
   `;
 
   const issues = [];
@@ -445,12 +441,14 @@ export async function runPosterOrganization() {
     state.poster.optimizeWithinLayout = Boolean(state.poster.result && state.poster.result.optimizeWithinLayout);
     state.poster.activeSessionId = null;
     state.poster.activeHardPaperId = null;
-    /* Auto-collapse setup panel and show summary */
+    /* Auto-collapse setup panel + sidebar, show summary */
     const r = state.poster.result;
     const sessionCount = r.sessions ? r.sessions.length : 0;
-    const paperCount = r.sessions ? r.sessions.reduce((s, sess) => s + (sess.assignments ? sess.assignments.length : 0), 0) : 0;
-    updateSetupSummary("posterSummaryChip", `${sessionCount} sessions, ${paperCount} papers, ${state.poster.layoutType} layout`);
+    const totalPapers = r.papers ? r.papers.length : r.sessions ? r.sessions.reduce((s, sess) => s + (sess.papers ? sess.papers.length : 0), 0) : 0;
+    updateSetupSummary("posterSummaryChip",
+      `${state.poster.demoInfo?.conference || state.poster.conference} \u00b7 ${totalPapers} papers \u00b7 ${sessionCount} sessions \u00b7 ${state.poster.layoutType} layout`);
     collapseSetupPanel("posterSetupPanel");
+    document.querySelector(".app")?.classList.add("sidebar-collapsed");
   } catch (err) {
     alert(`Poster organization backend error: ${err.message}`);
   } finally {
@@ -614,8 +612,9 @@ export function renderPosterSessionModal() {
     <div class="paper-move-card">
       <div><strong>Session Metadata</strong></div>
       <div class="tiny" style="margin-top:4px">Edit the generated session title, scheduling fields, location, description, and speaker information used by the export.</div>
+      <div class="tiny" style="margin-top:4px">Edit the session title, chair, scheduling, and location. Time and date changes apply to this session.</div>
       <div class="modal-field-grid">
-        <div class="modal-field">
+        <div class="modal-field modal-field-span">
           <label>Session Name</label>
           <input data-poster-session-name-input="${session.id}" type="text" value="${escapeHtml(session.sessionName || "")}" placeholder="Concise academic session name">
         </div>
@@ -624,32 +623,24 @@ export function renderPosterSessionModal() {
           <input data-poster-session-chair-input="${session.id}" type="text" value="${escapeHtml(session.sessionChair || "")}" placeholder="Leave blank or assign manually">
         </div>
         <div class="modal-field">
-          <label>Date</label>
-          <input data-poster-session-date-input="${session.id}" type="text" value="${escapeHtml(session.sessionDate || "")}" placeholder="e.g. 2025-07-17">
-        </div>
-        <div class="modal-field">
-          <label>Track</label>
+          <label>Track Label</label>
           <input data-poster-session-track-input="${session.id}" type="text" value="${escapeHtml(session.trackLabel || "")}" placeholder="Optional track label">
         </div>
         <div class="modal-field">
+          <label>Date</label>
+          <input data-poster-session-date-input="${session.id}" type="date" value="${escapeHtml(session.sessionDate || "")}">
+        </div>
+        <div class="modal-field">
           <label>Start Time</label>
-          <input data-poster-session-start-input="${session.id}" type="text" value="${escapeHtml(session.startTime || "")}" placeholder="e.g. 14:00">
+          <input data-poster-session-start-input="${session.id}" type="time" value="${escapeHtml(session.startTime || "")}">
         </div>
         <div class="modal-field">
           <label>End Time</label>
-          <input data-poster-session-end-input="${session.id}" type="text" value="${escapeHtml(session.endTime || "")}" placeholder="e.g. 15:30">
+          <input data-poster-session-end-input="${session.id}" type="time" value="${escapeHtml(session.endTime || "")}">
         </div>
         <div class="modal-field">
           <label>Room / Location</label>
           <input data-poster-session-location-input="${session.id}" type="text" value="${escapeHtml(session.location || "")}" placeholder="Optional room or venue">
-        </div>
-        <div class="modal-field">
-          <label>Speakers</label>
-          <input data-poster-session-speakers-input="${session.id}" type="text" value="${escapeHtml(session.speakers || "")}" placeholder="Optional speakers">
-        </div>
-        <div class="modal-field modal-field-span">
-          <label>Description</label>
-          <textarea data-poster-session-description-input="${session.id}" rows="3" placeholder="Optional session description">${escapeHtml(session.description || "")}</textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -664,7 +655,7 @@ export function renderPosterSessionModal() {
         return `
           <div class="paper-move-card">
             <div><strong>${escapeHtml(posterPaperId(paper))}</strong> - ${escapeHtml(paper.title || "")}</div>
-            <div class="tiny" style="margin-top:4px">Presenter: ${escapeHtml(posterPresentersLabel(paper))}</div>
+            <div class="tiny" style="margin-top:4px">Authors: ${escapeHtml(paperAuthorsOrPresentersLabel(paper) || "Not set")}</div>
             <div class="tiny">Current board: ${place ? escapeHtml(posterBoardLabel(place.cellIndex, result.layoutType, result.rows, result.cols)) : "N/A"}</div>
             <div class="paper-move-row">
               <div class="tiny">Target session</div>
@@ -715,8 +706,6 @@ export function renderPosterSessionModal() {
         startTime: body.querySelector(`input[data-poster-session-start-input="${sid}"]`)?.value || "",
         endTime: body.querySelector(`input[data-poster-session-end-input="${sid}"]`)?.value || "",
         location: body.querySelector(`input[data-poster-session-location-input="${sid}"]`)?.value || "",
-        speakers: body.querySelector(`input[data-poster-session-speakers-input="${sid}"]`)?.value || "",
-        description: body.querySelector(`textarea[data-poster-session-description-input="${sid}"]`)?.value || "",
       });
     }
   });
@@ -995,8 +984,7 @@ export function buildPosterExportHtml() {
         ${exportMetaCard("Time", sessionTimeLabel(session))}
         ${exportMetaCard("Track", session.trackLabel || posterSessionLabel(session.id))}
         ${exportMetaCard("Room / Location", session.location)}
-        ${exportMetaCard("Speakers / Chair", sessionSpeakersChairLabel(session))}
-        ${exportMetaCard("Description", session.description)}
+        ${exportMetaCard("Chair", session.sessionChair)}
       </div>
       <div class="paper-list">
         ${(session.cells || []).map((paper, idx) => {

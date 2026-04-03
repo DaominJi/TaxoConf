@@ -113,11 +113,27 @@ export async function createWorkspace() {
   btn.textContent = "Create";
 }
 
+export async function deleteWorkspace() {
+  const sel = document.getElementById("workspaceSelect");
+  const name = sel.value;
+  if (!name) return;
+  if (!confirm(`Delete workspace "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/workspaces/${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    showToast(`Workspace "${name}" deleted.`);
+    await loadWorkspaces();
+  } catch (e) {
+    showToast("Delete failed: " + e.message);
+  }
+}
+
 export function setupWorkspaceEvents() {
   document.getElementById("workspaceSelect").addEventListener("change", (e) => {
     switchWorkspace(e.target.value);
   });
   document.getElementById("wsAddBtn").addEventListener("click", openCreateWorkspaceModal);
+  document.getElementById("wsDeleteBtn").addEventListener("click", deleteWorkspace);
   document.getElementById("wsCreateBtn").addEventListener("click", createWorkspace);
   document.getElementById("wsCreateCancelBtn").addEventListener("click", closeCreateWorkspaceModal);
   document.getElementById("wsCreateModal").addEventListener("click", (e) => {
