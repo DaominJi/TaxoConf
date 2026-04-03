@@ -107,7 +107,9 @@ worst fit.  Each entry MUST reference a real session id and name from the \
 FULL SESSION DIRECTORY above, and include a brief "fit_reason" explaining \
 why that session would be suitable.
 - If you truly believe every paper in every session fits well, return an \
-empty array `[]`, but this should be rare.
+empty array `[]`, but this should be EXTREMELY rare — there are almost \
+always at least 3-5 misplaced papers across a full conference program.
+- Aim to flag roughly 5-10%% of papers as potentially misplaced.
 - Return ONLY the JSON array, no other text."""
 
 
@@ -183,9 +185,15 @@ def _parse_llm_response(raw: str) -> list[dict]:
             if result.get("paper_id"):
                 return [result]
             # Wrapper object with a list key
-            for key in ("flagged_papers", "papers", "results", "flags"):
+            for key in ("flagged_papers", "papers", "results", "flags", "misplaced_papers",
+                        "hard_papers", "flagged", "misplaced"):
                 if key in result and isinstance(result[key], list):
                     return [r for r in result[key] if isinstance(r, dict) and r.get("paper_id")]
+            # If the dict has any list values containing paper_id dicts, use the first one
+            for key, val in result.items():
+                if isinstance(val, list) and val and isinstance(val[0], dict) and val[0].get("paper_id"):
+                    logger.info(f"  Found flagged papers under unexpected key '{key}'")
+                    return [r for r in val if isinstance(r, dict) and r.get("paper_id")]
     except json.JSONDecodeError:
         pass
 
@@ -287,6 +295,9 @@ def review_sessions(llm, sessions_data: list[dict],
                         f"{response[:500]}")
             flags = _parse_llm_response(response)
             logger.info(f"  Chunk {i + 1} parsed: {len(flags)} flagged paper(s)")
+            if not flags and len(response.strip()) > 5:
+                logger.warning(f"  Chunk {i + 1}: LLM returned non-empty response but parser found 0 flags. "
+                               f"Response starts with: {response.strip()[:100]!r}")
             raw_flags.extend(flags)
         except Exception as e:
             logger.error(f"LLM session review chunk {i + 1} failed: {e}")
