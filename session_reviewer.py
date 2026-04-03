@@ -164,6 +164,7 @@ def _chunk_sessions(sessions_data: list[dict], max_papers_per_chunk: int = 120
 
 def _parse_llm_response(raw: str) -> list[dict]:
     """Extract flagged papers from the LLM response, tolerating various formats."""
+    import re
     text = raw.strip()
     # Strip markdown code fences
     if text.startswith("```"):
@@ -173,41 +174,35 @@ def _parse_llm_response(raw: str) -> list[dict]:
         text = text[:-3]
     text = text.strip()
 
-    # Try parsing as a JSON array first
-    if text.startswith("["):
-        try:
-            result = json.loads(text)
-            if isinstance(result, list):
-                return [r for r in result if isinstance(r, dict) and r.get("paper_id")]
-        except json.JSONDecodeError:
-            pass
-
-    # Try extracting a JSON array from surrounding text
-    start = text.find("[")
-    end = text.rfind("]")
-    if start >= 0 and end > start:
-        try:
-            result = json.loads(text[start:end + 1])
-            if isinstance(result, list):
-                return [r for r in result if isinstance(r, dict) and r.get("paper_id")]
-        except json.JSONDecodeError:
-            pass
-
-    # Try parsing as a single JSON object (LLM sometimes returns one object)
-    if text.startswith("{"):
-        try:
-            result = json.loads(text)
-            if isinstance(result, dict) and result.get("paper_id"):
+    # 1. Try direct parse — works for arrays, single objects, etc.
+    try:
+        result = json.loads(text)
+        if isinstance(result, list):
+            return [r for r in result if isinstance(r, dict) and r.get("paper_id")]
+        if isinstance(result, dict):
+            if result.get("paper_id"):
                 return [result]
-            # Maybe it has a wrapper key like "flagged_papers"
+            # Wrapper object with a list key
             for key in ("flagged_papers", "papers", "results", "flags"):
                 if key in result and isinstance(result[key], list):
                     return [r for r in result[key] if isinstance(r, dict) and r.get("paper_id")]
-        except json.JSONDecodeError:
-            pass
+    except json.JSONDecodeError:
+        pass
 
-    # Last resort: find all {...} objects containing paper_id via regex
-    import re
+    # 2. Try extracting a top-level JSON array (skip brackets inside string values)
+    #    Find the first '[' that isn't preceded by ': "' context (heuristic)
+    arr_start = text.find("[")
+    if arr_start == 0 or (arr_start > 0 and text[arr_start - 1] in ("\n", " ", ",")):
+        arr_end = text.rfind("]")
+        if arr_end > arr_start:
+            try:
+                result = json.loads(text[arr_start:arr_end + 1])
+                if isinstance(result, list):
+                    return [r for r in result if isinstance(r, dict) and r.get("paper_id")]
+            except json.JSONDecodeError:
+                pass
+
+    # 3. Regex fallback: find all {...} objects containing "paper_id"
     objects = re.findall(r'\{[^{}]*"paper_id"[^{}]*\}', text)
     results = []
     for obj_str in objects:
