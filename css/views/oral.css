@@ -100,48 +100,58 @@
 /* ── Inline grid editing ────────────────── */
 
 .grid-header-slot {
-  min-width: 160px;
+  min-width: 170px;
+  max-width: 190px;
   vertical-align: bottom;
+  background: linear-gradient(145deg, #f6fbf9, #edf5f2) !important;
+  border-right: 2px solid var(--line) !important;
 }
 
 .grid-header-track {
   vertical-align: bottom;
+  padding-bottom: 10px !important;
 }
 
 .grid-track-label {
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  font-size: 0.84rem;
 }
 
 .grid-slot-cell {
-  min-width: 160px;
+  min-width: 170px;
+  max-width: 190px;
   vertical-align: top;
-  padding: 10px !important;
+  padding: 12px 14px !important;
+  background: linear-gradient(145deg, #f6fbf9, #edf5f2) !important;
+  border-right: 2px solid var(--line) !important;
 }
 
 .grid-slot-label {
   font-weight: 700;
-  font-size: 0.88rem;
-  margin-bottom: 8px;
+  font-size: 0.92rem;
   color: var(--ink);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(19, 143, 139, 0.15);
 }
 
 .grid-slot-fields {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .grid-field {
   display: grid;
-  gap: 2px;
+  gap: 3px;
 }
 
 .grid-field span {
-  font-size: 0.65rem;
-  color: var(--ink-soft);
+  font-size: 0.64rem;
+  color: var(--accent-strong);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-weight: 700;
 }
 
 .grid-inline-input {
