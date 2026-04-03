@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
 import {
   submissionDist,
   similarity,
@@ -1223,12 +1223,41 @@ export function setupPosterEvents() {
     document.getElementById(id).addEventListener("input", posterInputHandler);
     document.getElementById(id).addEventListener("change", posterInputHandler);
   });
-  document.getElementById("exportPosterBtn").addEventListener("click", () => {
+  document.getElementById("exportPosterBtn").addEventListener("click", async () => {
     if (!state.poster.result) {
       alert("Run poster organization first.");
       return;
     }
     const format = document.getElementById("posterExportFormatSelect").value;
+    if (format === "excel") {
+      try {
+        const result = state.poster.result;
+        const resp = await fetch(`${API_BASE}/poster/export-excel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessions: result.sessions.map((s) => ({
+              sessionName: s.sessionName || "",
+              sessionChair: s.sessionChair || "",
+              sessionDate: s.sessionDate || "",
+              startTime: s.startTime || "",
+              endTime: s.endTime || "",
+              trackLabel: s.trackLabel || "",
+              track: s.track || 0,
+              location: s.location || "",
+            })),
+            trackNames: result.trackNames || [],
+          }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "poster_schedule.xlsx"; a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) { alert("Excel export failed: " + e.message); }
+      return;
+    }
     if (format === "csv") {
       downloadFile("poster_session_schedule.csv", buildPosterExportCsv(), "text/csv;charset=utf-8");
       return;

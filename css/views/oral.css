@@ -140,6 +140,14 @@
   font-size: 0.84rem;
 }
 
+.grid-track-name {
+  font-weight: 700 !important;
+  font-size: 0.84rem !important;
+  color: var(--ink) !important;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
 .grid-slot-cell {
   min-width: 170px;
   max-width: 190px;

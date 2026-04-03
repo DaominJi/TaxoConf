@@ -501,6 +501,77 @@ async def oral_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# ── Excel export ─────────────────────────────────────────────────────
+
+@app.post("/api/{mode}/export-excel")
+async def export_excel(mode: str, request: Request):
+    """Export session schedule to Excel using the template."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+    try:
+        import openpyxl
+        from io import BytesIO
+
+        body = await request.json()
+        sessions = body.get("sessions", [])
+        track_names = body.get("trackNames", [])
+
+        template_path = PROJECT_ROOT / "template" / "excel_template.xlsx"
+        if not template_path.is_file():
+            return JSONResponse({"error": "Excel template not found"}, status_code=404)
+
+        wb = openpyxl.load_workbook(str(template_path))
+        ws = wb["Agenda"]
+
+        row = 25  # Start data at row 25
+        for session in sessions:
+            s_date = session.get("sessionDate", "")
+            s_start = session.get("startTime", "")
+            s_end = session.get("endTime", "")
+            s_track_idx = session.get("track", 0)
+            s_track_name = ""
+            if track_names and 0 < s_track_idx <= len(track_names):
+                s_track_name = track_names[s_track_idx - 1]
+            elif session.get("trackLabel"):
+                s_track_name = session["trackLabel"]
+            s_title = session.get("sessionName", "")
+            s_room = session.get("location", "")
+            s_chair = session.get("sessionChair", "")
+
+            # Write session row
+            ws.cell(row=row, column=1, value=s_date)       # Date
+            ws.cell(row=row, column=2, value=s_start)      # Time Start
+            ws.cell(row=row, column=3, value=s_end)        # Time End
+            ws.cell(row=row, column=4, value=s_track_name) # Tracks
+            ws.cell(row=row, column=5, value=s_title)      # Session Title
+            ws.cell(row=row, column=6, value=s_room)       # Room/Location
+            ws.cell(row=row, column=7, value="")           # Description (empty)
+            ws.cell(row=row, column=8, value=s_chair)      # Speakers (chair)
+            ws.cell(row=row, column=9, value="")           # Authors (empty)
+            ws.cell(row=row, column=10, value="")          # Session/Sub (empty)
+            row += 1
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        from starlette.responses import Response
+        filename = f"{mode}_schedule.xlsx"
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except ImportError:
+        return JSONResponse(
+            {"error": "openpyxl is required for Excel export. Install with: pip install openpyxl"},
+            status_code=500,
+        )
+    except Exception as e:
+        logger.error(f"{mode}/export-excel error: {e}\n{traceback.format_exc()}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ── Progress save/load (oral + poster, with named saves) ────────────
 
 import re as _re

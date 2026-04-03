@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
 import {
   submissionDist,
   avgDist,
@@ -293,6 +293,32 @@ function setTrackLocation(track, location) {
   });
   autoSaveOralProgress();
   renderOralResults();
+}
+
+/** Get or initialize track names array on the result. */
+function ensureTrackNames(result, K) {
+  if (!result.trackNames || result.trackNames.length < K) {
+    result.trackNames = Array.from({ length: K }, (_, i) =>
+      (result.trackNames && result.trackNames[i]) || `Session ${String.fromCharCode(65 + i)}`
+    );
+  }
+  return result.trackNames;
+}
+
+/** Set the name for a track and propagate trackLabel to all sessions in it. */
+function setTrackName(track, name) {
+  const result = state.oral.result;
+  if (!result) return;
+  const K = state.oral.parallelSessions;
+  const names = ensureTrackNames(result, K);
+  names[track - 1] = String(name || "").trim();
+  result.sessions.forEach((s) => {
+    if (s.track === track) {
+      ensureSessionMetadata(s);
+      s.trackLabel = names[track - 1];
+    }
+  });
+  autoSaveOralProgress();
 }
 
 /* ═══════════════════ Load info ═══════════════════ */
@@ -846,14 +872,17 @@ export function renderOralResults() {
         <thead>
           <tr>
             <th class="grid-header-slot">Schedule</th>
-            ${Array.from({ length: K }, (_, i) => {
-              const track = i + 1;
-              const loc = trackLocations[track] || "";
-              return `<th class="grid-header-track">
-                <div class="grid-track-label">Track ${track}</div>
-                <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
-              </th>`;
-            }).join("")}
+            ${(() => {
+              const names = ensureTrackNames(result, K);
+              return Array.from({ length: K }, (_, i) => {
+                const track = i + 1;
+                const loc = trackLocations[track] || "";
+                return `<th class="grid-header-track">
+                  <input class="grid-inline-input grid-track-name" data-track-name="${track}" type="text" value="${escapeHtml(names[i])}" placeholder="Track name">
+                  <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
+                </th>`;
+              }).join("");
+            })()}
           </tr>
         </thead>
         <tbody>
@@ -973,6 +1002,8 @@ export function renderOralResults() {
       const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
       const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
       setSlotTimeFields(slot, { startTime: startEl?.value, endTime: endEl?.value, sessionDate: el.value });
+    } else if (el.dataset.trackName) {
+      setTrackName(Number(el.dataset.trackName), el.value);
     } else if (el.dataset.trackLocation) {
       setTrackLocation(Number(el.dataset.trackLocation), el.value);
     }
@@ -1163,12 +1194,41 @@ export function setupOralEvents() {
       renderOralCapacityNotice();
     });
   });
-  document.getElementById("exportOralBtn").addEventListener("click", () => {
+  document.getElementById("exportOralBtn").addEventListener("click", async () => {
     if (!state.oral.result) {
       alert("Run oral organization first.");
       return;
     }
     const format = document.getElementById("oralExportFormatSelect").value;
+    if (format === "excel") {
+      try {
+        const result = state.oral.result;
+        const resp = await fetch(`${API_BASE}/oral/export-excel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessions: result.sessions.map((s) => ({
+              sessionName: s.sessionName || "",
+              sessionChair: s.sessionChair || "",
+              sessionDate: s.sessionDate || "",
+              startTime: s.startTime || "",
+              endTime: s.endTime || "",
+              trackLabel: s.trackLabel || "",
+              track: s.track || 0,
+              location: s.location || "",
+            })),
+            trackNames: result.trackNames || [],
+          }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "oral_schedule.xlsx"; a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) { alert("Excel export failed: " + e.message); }
+      return;
+    }
     if (format === "csv") {
       downloadFile("oral_session_schedule.csv", buildOralExportCsv(), "text/csv;charset=utf-8");
       return;
