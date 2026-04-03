@@ -77,49 +77,62 @@ def discover_conferences() -> list[str]:
     return conferences
 
 
-def load_conference_papers(conference: str) -> list[Paper]:
-    """Load papers from a conference data directory."""
-    conf_dir = DATA_DIR / conference
-    if not conf_dir.is_dir():
-        raise ValueError(f"Conference directory not found: {conf_dir}")
+def _resolve_paper_file(conf_dir: Path, mode: str = "oral") -> Path:
+    """Resolve the paper JSON file for a conference workspace and mode.
 
-    # Find the papers JSON file
-    json_files = list(conf_dir.glob("*.json"))
-    if not json_files:
-        raise ValueError(f"No JSON files in {conf_dir}")
+    Resolution order:
+    1. workspace.json → oral_papers / poster_papers path (explicit)
+    2. {mode}/papers.json (convention-based subfolder)
+    3. Legacy fallback: first non-system JSON in the root directory
+    """
+    ws_json = conf_dir / "workspace.json"
+    if ws_json.is_file():
+        try:
+            with open(ws_json) as f:
+                meta = json.load(f)
+            key = f"{mode}_papers"
+            if key in meta and meta[key]:
+                explicit = conf_dir / meta[key]
+                if explicit.is_file():
+                    return explicit
+        except Exception:
+            pass
 
-    # Try to find the main paper file (prefer *Full_Papers*.json, else first json)
-    # Skip known non-paper JSON files
+    # Convention: {mode}/papers.json
+    mode_file = conf_dir / mode / "papers.json"
+    if mode_file.is_file():
+        return mode_file
+
+    # Legacy fallback: first non-system JSON in root
     _SKIP_NAMES = {"metadata", "workspace", "token_usage", "oral_progress", "poster_progress"}
-    paper_file = None
-    for f in json_files:
+    for f in sorted(conf_dir.glob("*.json")):
         if not any(skip in f.name.lower() for skip in _SKIP_NAMES):
-            paper_file = f
-            break
-    if paper_file is None:
-        paper_file = json_files[0]
+            return f
 
-    # Also look for a companion metadata file for abstracts
-    abstract_lookup: dict[str, str] = {}
-    for f in json_files:
-        if "metadata" in f.name.lower():
-            try:
-                with open(f) as mf:
-                    meta = json.load(mf)
-                for m in meta:
-                    if m.get("abstract"):
-                        abstract_lookup[m["title"]] = m["abstract"]
-                logger.info(f"Loaded {len(abstract_lookup)} abstracts from {f.name}")
-            except Exception:
-                pass
-            break
+    raise ValueError(f"No paper data found for mode '{mode}' in {conf_dir}")
 
+
+def _parse_papers_json(paper_file: Path) -> list[Paper]:
+    """Parse a paper JSON file into Paper objects."""
     with open(paper_file) as f:
         data = json.load(f)
 
+    # Also look for a companion metadata file for abstracts
+    abstract_lookup: dict[str, str] = {}
+    meta_file = paper_file.parent / "metadata.json"
+    if meta_file.is_file():
+        try:
+            with open(meta_file) as mf:
+                meta = json.load(mf)
+            for m in meta:
+                if m.get("abstract"):
+                    abstract_lookup[m["title"]] = m["abstract"]
+        except Exception:
+            pass
+
     papers = []
     for e in data:
-        paper_id = str(e["id"])
+        paper_id = str(e.get("id", e.get("paper_id", "")))
         raw_authors = e.get("authors", [])
         if isinstance(raw_authors, str):
             authors = [a.strip() for a in raw_authors.split(",") if a.strip()]
@@ -135,6 +148,15 @@ def load_conference_papers(conference: str) -> list[Paper]:
     return papers
 
 
+def load_conference_papers(conference: str, mode: str = "oral") -> list[Paper]:
+    """Load papers for a specific mode (oral/poster) from a conference workspace."""
+    conf_dir = DATA_DIR / conference
+    if not conf_dir.is_dir():
+        raise ValueError(f"Conference directory not found: {conf_dir}")
+    paper_file = _resolve_paper_file(conf_dir, mode)
+    return _parse_papers_json(paper_file)
+
+
 # ── Caches ──
 
 _paper_cache: dict[str, list[Paper]] = {}
@@ -142,10 +164,11 @@ _taxonomy_cache: dict[str, TaxonomyNode] = {}
 _similarity_cache: dict[str, SimilarityEngine] = {}
 
 
-def get_papers(conference: str) -> list[Paper]:
-    if conference not in _paper_cache:
-        _paper_cache[conference] = load_conference_papers(conference)
-    return _paper_cache[conference]
+def get_papers(conference: str, mode: str = "oral") -> list[Paper]:
+    cache_key = f"{conference}_{mode}"
+    if cache_key not in _paper_cache:
+        _paper_cache[cache_key] = load_conference_papers(conference, mode)
+    return _paper_cache[cache_key]
 
 
 def get_taxonomy(conference: str, papers: list[Paper]) -> TaxonomyNode:
@@ -361,7 +384,7 @@ async def oral_info(conference: str = Query("SIGIR25")):
         # Normalize conference name
         conf = _resolve_conference(conference, conferences)
 
-        papers = get_papers(conf)
+        papers = get_papers(conf, "oral")
         stats = get_presenter_stats(papers)
         suggested = compute_oral_defaults(len(papers))
 
@@ -403,7 +426,7 @@ async def oral_run(request: Request):
         config.NUM_SLOTS = time_slots
         config.NUM_PARALLEL_TRACKS = parallel_sessions
 
-        papers = get_papers(conf)
+        papers = get_papers(conf, "oral")
         papers_map = {p.id: p for p in papers}
         taxonomy_root = get_taxonomy(conf, papers)
 
@@ -683,7 +706,7 @@ async def poster_info(conference: str = Query("SIGIR25")):
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
 
-        papers = get_papers(conf)
+        papers = get_papers(conf, "poster")
         stats = get_presenter_stats(papers)
         suggested = compute_poster_defaults(len(papers))
 
@@ -738,7 +761,7 @@ async def poster_run(request: Request):
         config.POSTER_PROXIMITY = optimize_within
         config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
 
-        papers = get_papers(conf)
+        papers = get_papers(conf, "poster")
         papers_map = {p.id: p for p in papers}
         taxonomy_root = get_taxonomy(conf, papers)
 
@@ -865,7 +888,7 @@ async def assignment_info(conference: str = Query("SIGIR25")):
     conferences = discover_conferences()
     conf = _resolve_conference(conference, conferences)
     try:
-        papers = get_papers(conf)
+        papers = get_papers(conf, "oral")
         paper_count = len(papers)
     except Exception:
         paper_count = 0
@@ -1108,24 +1131,32 @@ async def get_workspace(name: str):
 
 @app.post("/api/workspaces/{name}/upload")
 async def upload_workspace_papers(name: str, request: Request):
-    """Upload a paper JSON file to a workspace."""
+    """Upload a paper JSON file to a workspace.
+
+    Accepts an optional `mode` field ("oral" or "poster") to store papers
+    in the appropriate subfolder. Defaults to "oral".
+    """
     ws_dir = DATA_DIR / name
     if not ws_dir.is_dir():
         return JSONResponse({"error": f"Workspace '{name}' not found."}, status_code=404)
 
     body = await request.json()
     papers = body.get("papers", [])
-    filename = body.get("filename", f"{name}_papers.json")
+    mode = body.get("mode", "oral")
+    if mode not in ("oral", "poster"):
+        mode = "oral"
 
     if not papers or not isinstance(papers, list):
         return JSONResponse({"error": "Invalid papers data. Expected a JSON array."}, status_code=400)
 
-    # Save papers file
-    out_path = ws_dir / filename
+    # Save papers under mode subfolder
+    mode_dir = ws_dir / mode
+    mode_dir.mkdir(parents=True, exist_ok=True)
+    out_path = mode_dir / "papers.json"
     with open(out_path, "w") as fh:
         json.dump(papers, fh, indent=2)
 
-    # Update workspace.json
+    # Update workspace.json with explicit path and count
     _ensure_workspace_json(ws_dir, name)
     ws_json = ws_dir / "workspace.json"
     try:
@@ -1133,17 +1164,19 @@ async def upload_workspace_papers(name: str, request: Request):
             meta = json.load(fh)
     except Exception:
         meta = {"name": name}
-    meta["paper_count"] = len(papers)
+    meta[f"{mode}_papers"] = f"{mode}/papers.json"
+    meta[f"{mode}_paper_count"] = len(papers)
     with open(ws_json, "w") as fh:
         json.dump(meta, fh, indent=2)
 
-    # Clear paper cache so next load picks up new data
-    _paper_cache.pop(name, None)
+    # Clear caches for this mode
+    _paper_cache.pop(f"{name}_oral", None)
+    _paper_cache.pop(f"{name}_poster", None)
     _taxonomy_cache.pop(name, None)
     _similarity_cache.pop(name, None)
 
-    logger.info(f"Uploaded {len(papers)} papers to workspace '{name}' as '{filename}'")
-    return {"success": True, "paper_count": len(papers), "filename": filename}
+    logger.info(f"Uploaded {len(papers)} {mode} papers to workspace '{name}'")
+    return {"success": True, "paper_count": len(papers), "mode": mode}
 
 
 @app.delete("/api/workspaces/{name}")
