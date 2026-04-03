@@ -1143,10 +1143,6 @@ export function setupOralEvents() {
       renderOralCapacityNotice();
     });
   });
-  document.getElementById("oralViewModeSelect").addEventListener("change", (e) => {
-    state.oral.detailMode = e.target.value === "detailed" ? "detailed" : "concise";
-    renderOralResults();
-  });
   document.getElementById("exportOralBtn").addEventListener("click", () => {
     if (!state.oral.result) {
       alert("Run oral organization first.");

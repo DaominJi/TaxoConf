@@ -1208,10 +1208,6 @@ export function setupPosterEvents() {
     document.getElementById(id).addEventListener("input", posterInputHandler);
     document.getElementById(id).addEventListener("change", posterInputHandler);
   });
-  document.getElementById("posterViewModeSelect").addEventListener("change", (e) => {
-    state.poster.detailMode = e.target.value === "detailed" ? "detailed" : "concise";
-    renderPosterResults();
-  });
   document.getElementById("exportPosterBtn").addEventListener("click", () => {
     if (!state.poster.result) {
       alert("Run poster organization first.");
