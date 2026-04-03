@@ -73,119 +73,103 @@
     <main class="content">
       <section class="task-view is-active" id="task-overview">
         <section class="panel setup-panel">
-          <h2>Setup Panel: Workspace Overview</h2>
-          <div class="grid-3">
-            <div class="control-card">
-              <h3 style="margin:0 0 8px;font-size:0.9rem">What This Page Supports</h3>
-              <div class="tiny">
-                This workspace combines four conference-management functions in one interface:
-                paper assignment, reviewer discovery, oral session organization, and poster session organization.
-                Each task keeps its own setup area and result area so users can switch tasks without mixing controls.
-              </div>
-            </div>
+          <h2 style="font-size:1.2rem;letter-spacing:-0.02em;margin-bottom:4px">TaxoConf</h2>
+          <p class="tiny" style="margin-bottom:14px;max-width:640px">A taxonomy-driven framework for conference organization. TaxoConf constructs a hierarchical taxonomy over accepted papers using LLMs, then leverages this structure to support four key functions.</p>
 
+          <div class="grid-2" style="gap:12px">
             <div class="control-card">
-              <h3 style="margin:0 0 8px;font-size:0.9rem">Inputs You Will Provide</h3>
-              <div class="tiny">
-                Assignment: demo mode uses server-side reviewer/meta-reviewer matrices; normal mode accepts uploaded
-                submissions, reviewers, meta-reviewers, and COI data.<br><br>
-                Reviewer Discovery: currently disabled while the backend workflow is still being integrated.<br><br>
-                Oral / Poster: session parameters over conference-specific demo datasets under `./data/*`, with
-                automatic LLM-generated session names, hard-paper analysis, and last-mile modification support.
-              </div>
+              <div class="tiny" style="color:var(--accent);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px">01</div>
+              <h3 style="margin:0 0 4px;font-size:0.88rem">Paper&ndash;reviewer assignment</h3>
+              <div class="tiny">Represents reviewer expertise as distributions over taxonomy nodes derived from publication history. Matches submitted papers to reviewers with high topical alignment.</div>
             </div>
-
             <div class="control-card">
-              <h3 style="margin:0 0 8px;font-size:0.9rem">How To Use It</h3>
-              <div class="tiny">
-                1. Select a task in the sidebar.<br>
-                2. Configure the task-specific inputs in the top setup panel.<br>
-                3. Run the algorithm and inspect the output in the main panel.<br>
-                4. Manually edit assignments or schedules where the task supports editing.<br>
-                5. Export the final assignment or session arrangement after manual edits if needed.
-              </div>
+              <div class="tiny" style="color:var(--accent-warm);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px">02</div>
+              <h3 style="margin:0 0 4px;font-size:0.88rem">PC member discovery</h3>
+              <div class="tiny">Identifies promising additional reviewers from a large-scale expert pool when the existing PC lacks sufficient coverage for specific topics or papers.</div>
+            </div>
+            <div class="control-card">
+              <div class="tiny" style="color:var(--accent-strong);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px">03</div>
+              <h3 style="margin:0 0 4px;font-size:0.88rem">Oral session organization</h3>
+              <div class="tiny">Groups papers into coherent oral sessions by exploiting the taxonomy hierarchy, jointly optimizing capacity constraints and inter-session diversity.</div>
+            </div>
+            <div class="control-card">
+              <div class="tiny" style="color:var(--accent-muted);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px">04</div>
+              <h3 style="margin:0 0 4px;font-size:0.88rem">Poster session organization</h3>
+              <div class="tiny">Arranges posters by combining taxonomy-based topical proximity with spatial layout optimization, placing related posters in adjacent positions.</div>
             </div>
           </div>
         </section>
 
         <section class="panel result-panel">
-          <h2>Main Panel: Functions and Technical Details</h2>
-          <div class="summary">
-            <div class="metric"><div class="label">Functions</div><div class="value">4</div></div>
-            <div class="metric"><div class="label">Assignment Modes</div><div class="value">2</div></div>
-            <div class="metric"><div class="label">Active Workflows</div><div class="value">3</div></div>
-            <div class="metric"><div class="label">Manual Editing</div><div class="value">Supported</div></div>
+          <h2>Input Data</h2>
+          <p class="tiny" style="margin:-4px 0 12px">TaxoConf accepts paper metadata in both <strong>CSV</strong> and <strong>JSON</strong> formats. The required fields are <code>id</code>, <code>title</code>, and <code>authors</code>. An optional <code>abstract</code> field improves topic classification.</p>
+
+          <div class="tabs" style="margin-bottom:10px">
+            <button class="small-tab is-active" type="button" data-overview-tab="csv">CSV</button>
+            <button class="small-tab" type="button" data-overview-tab="json">JSON</button>
           </div>
 
-          <div class="result-split">
-            <div class="list-card">
-              <h3>Functions</h3>
-              <div class="overview-flow">
-                <div class="overview-step">
-                  <div class="step-kicker">Function 1</div>
-                  <div class="step-title">Paper Assignment</div>
-                  <div class="step-copy">
-                    Assigns papers to reviewers and meta-reviewers. Demo mode uses server-side affinity matrices;
-                    normal mode computes assignment from uploaded paper and reviewer data plus COI constraints.
-                  </div>
-                </div>
-                <div class="overview-step">
-                  <div class="step-kicker">Function 2</div>
-                  <div class="step-title">Reviewer Discovery</div>
-                  <div class="step-copy">
-                    This tab is currently being integrated. The page stays visible as a placeholder, but its controls
-                    are disabled until the reviewer-discovery backend is finalized.
-                  </div>
-                </div>
-                <div class="overview-step">
-                  <div class="step-kicker">Function 3</div>
-                  <div class="step-title">Oral Session Organization</div>
-                  <div class="step-copy">
-                    Groups oral papers into time slots and parallel tracks, checks presenter conflicts across parallel
-                    sessions, assigns concise session names automatically, and highlights hard-to-place papers for last-mile revision.
-                  </div>
-                </div>
-                <div class="overview-step">
-                  <div class="step-kicker">Function 4</div>
-                  <div class="step-title">Poster Session Organization</div>
-                  <div class="step-copy">
-                    Arranges posters into line, circle, or rectangle floor plans, supports manual board reassignment,
-                    can optimize within-floor-plan similarity, and exports the final schedule with editable session names and chairs.
-                  </div>
-                </div>
+          <div id="overviewTabCsv" class="control-card" style="padding:14px 16px;font-family:'IBM Plex Mono',monospace;font-size:0.76rem;line-height:1.7;overflow-x:auto;white-space:pre">id,title,authors,abstract
+1,"Retrieval-Augmented Generation with Adaptive Passage Selection","Alice Wang, Bob Chen, Carol Liu","We propose a novel RAG framework that dynamically selects..."
+2,"Fair Exposure in Conversational Recommendation Systems","David Kim, Eva Martinez","This paper addresses fairness constraints in multi-turn..."
+3,"Efficient Dense Retrieval via Learned Index Structures","Frank Zhou, Grace Tan","We introduce a learned indexing approach for approximate..."
+4,"Query Performance Prediction Using Large Language Models","Hao Li, Isabel Fernandez","We study the effectiveness of LLMs as zero-shot query..."
+5,"User Simulation for Evaluating Interactive IR Systems","James Park, Karen Wu, Leo Zhang","We present a user simulation framework grounded in..."</div>
+
+          <div id="overviewTabJson" class="control-card" style="padding:14px 16px;font-family:'IBM Plex Mono',monospace;font-size:0.76rem;line-height:1.7;overflow-x:auto;white-space:pre;display:none">[
+  {
+    "id": 1,
+    "title": "Retrieval-Augmented Generation with Adaptive Passage Selection",
+    "authors": "Alice Wang, Bob Chen, Carol Liu",
+    "abstract": "We propose a novel RAG framework that dynamically selects..."
+  },
+  {
+    "id": 2,
+    "title": "Fair Exposure in Conversational Recommendation Systems",
+    "authors": "David Kim, Eva Martinez",
+    "abstract": "This paper addresses fairness constraints in multi-turn..."
+  }
+]</div>
+
+          <div style="margin-top:14px">
+            <h3 style="font-size:0.9rem;margin-bottom:8px">Output Formats</h3>
+            <div class="grid-3" style="gap:10px">
+              <div class="control-card" style="text-align:center;padding:12px">
+                <div style="font-size:1.2rem;margin-bottom:4px">&#128196;</div>
+                <h3 style="font-size:0.82rem;margin:0 0 2px">Excel</h3>
+                <div class="tiny">Spreadsheets using conference template</div>
+              </div>
+              <div class="control-card" style="text-align:center;padding:12px">
+                <div style="font-size:1.2rem;margin-bottom:4px">&#128462;</div>
+                <h3 style="font-size:0.82rem;margin:0 0 2px">CSV</h3>
+                <div class="tiny">Same schema as Excel for compatibility</div>
+              </div>
+              <div class="control-card" style="text-align:center;padding:12px">
+                <div style="font-size:1.2rem;margin-bottom:4px">&#127760;</div>
+                <h3 style="font-size:0.82rem;margin:0 0 2px">HTML</h3>
+                <div class="tiny">Interactive pages with search and print</div>
               </div>
             </div>
+          </div>
 
-            <div class="detail-card">
-              <h3>Technical Details</h3>
-              <div class="tech-grid">
-                <div class="tech-note">
-                  The system maps papers and PC members to a shared IR taxonomy as sparse topic distributions. Text signals
-                  come from titles, abstracts, and PC publication histories, with lightweight keyword and hint-based routing
-                  to fine-grained leaf topics.
-                </div>
-                <div class="tech-note">
-                  Paper Assignment has two execution paths: a demo path backed by server-side affinity/conflict matrices,
-                  and a normal path that derives topic-based similarities from uploaded JSON data before solving the same
-                  capacity-constrained assignment problem.
-                </div>
-                <div class="tech-note">
-                  Reviewer Discovery is currently marked as work in progress. The frontend placeholder remains in the
-                  navigation so the unified layout stays stable while the backend integration is completed.
-                </div>
-                <div class="tech-note">
-                  Oral organization builds session centroids from paper topic distributions and places papers into tracks and
-                  time slots to maximize topical coherence under hard capacity constraints and presenter conflict rules. The run also assigns session names and surfaces hard papers for last-mile modification.
-                </div>
-                <div class="tech-note">
-                  Poster organization fills a configurable venue layout where each cell corresponds to one poster board.
-                  Both oral and poster results support manual reassignment. Poster organization can optionally optimize similarity within each floor plan and also returns hard-paper flags for final adjustment.
-                </div>
-                <div class="tech-note">
-                  The frontend and backend are separated. The HTML page calls dedicated backend modules for assignment,
-                  discovery, oral scheduling, and poster scheduling through JSON API endpoints.
-                </div>
-              </div>
+          <div style="margin-top:14px">
+            <h3 style="font-size:0.9rem;margin-bottom:8px">How To Use</h3>
+            <div class="tiny">
+              1. Select <strong>Oral Session Organization</strong> or <strong>Poster Session Organization</strong> in the sidebar.<br>
+              2. Configure session parameters (tracks, time slots, capacity) in the setup panel.<br>
+              3. Click <strong>Run</strong> to generate the schedule with LLM-powered session naming.<br>
+              4. Edit session metadata (chairs, times, rooms) inline or via the detail panel.<br>
+              5. <strong>Save Progress</strong> to preserve edits, <strong>Load Progress</strong> to resume later.<br>
+              6. <strong>Export</strong> to Excel, CSV, or HTML when ready.
+            </div>
+          </div>
+
+          <div style="margin-top:14px">
+            <h3 style="font-size:0.9rem;margin-bottom:8px">Resources</h3>
+            <div class="tiny">
+              <a href="https://github.com/DaominJi/TaxoConf" target="_blank" style="color:var(--accent)">GitHub Repository</a> &mdash; Source code and installation guide<br>
+              <a href="https://drive.google.com/drive/folders/1CGWR8dQAImLSdPQ58_7c_KENvS-6L9ca?usp=drive_link" target="_blank" style="color:var(--accent)">Supplementary Materials</a> &mdash; Datasets and documentation<br>
+              Contact: <a href="mailto:daominji@student.rmit.edu.au" style="color:var(--accent)">daominji@student.rmit.edu.au</a>
             </div>
           </div>
         </section>
