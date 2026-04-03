@@ -1181,8 +1181,8 @@ async def upload_workspace_papers(name: str, request: Request):
     _taxonomy_cache.pop(name, None)
     _similarity_cache.pop(name, None)
 
-    logger.info(f"Uploaded {len(papers)} {mode} papers to workspace '{name}'")
-    return {"success": True, "paper_count": len(papers), "mode": mode}
+    logger.info(f"Uploaded {len(papers)} papers to workspace '{name}'")
+    return {"success": True, "paper_count": len(papers)}
 
 
 @app.delete("/api/workspaces/{name}")
