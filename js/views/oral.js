@@ -73,13 +73,16 @@ function restoreLocalProgress() {
 export async function saveOralProgressToServer() {
   const result = state.oral.result;
   if (!result) { alert("No oral result to save."); return; }
+  const name = prompt("Save name:", `oral_${new Date().toISOString().slice(0, 10)}`);
+  if (!name) return;
   try {
     const resp = await apiPost("/oral/progress", {
       conference: state.oral.conference,
       result: result,
+      name: name,
     });
     if (resp.success) {
-      showToast("Oral session progress saved to server.");
+      showToast(`Saved as "${resp.name || name}".`);
     } else {
       alert("Failed to save: " + (resp.error || "Unknown error"));
     }
@@ -88,20 +91,31 @@ export async function saveOralProgressToServer() {
   }
 }
 
-/** Load progress from backend server. */
+/** Load progress from backend server — shows a list of available saves. */
 export async function loadOralProgressFromServer() {
   try {
-    const resp = await apiGet(`/oral/progress?conference=${encodeURIComponent(state.oral.conference)}`);
+    const listResp = await apiGet(`/oral/progress/list?conference=${encodeURIComponent(state.oral.conference)}`);
+    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
+      showToast("No saved progress found on server.");
+      return false;
+    }
+    const saves = listResp.saves;
+    const choices = saves.map((s, i) => `${i + 1}. ${s.name} (${new Date(s.modified * 1000).toLocaleString()})`).join("\n");
+    const pick = prompt(`Available saves:\n${choices}\n\nEnter number to load:`, "1");
+    if (!pick) return false;
+    const idx = parseInt(pick, 10) - 1;
+    if (idx < 0 || idx >= saves.length) { alert("Invalid selection."); return false; }
+    const chosen = saves[idx].name.replace(" (legacy)", "");
+
+    const resp = await apiGet(`/oral/progress?conference=${encodeURIComponent(state.oral.conference)}&name=${encodeURIComponent(chosen)}`);
     if (resp.success && resp.result) {
       state.oral.result = resp.result;
-      autoSaveOralProgress(); /* sync to localStorage too */
+      autoSaveOralProgress();
       renderOralResults();
-      showToast("Oral session progress loaded from server.");
+      showToast(`Loaded "${chosen}".`);
       return true;
     }
-    if (!resp.success) {
-      showToast("No saved progress found on server.");
-    }
+    showToast("Failed to load save.");
     return false;
   } catch (e) {
     alert("Load failed: " + e.message);

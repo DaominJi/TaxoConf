@@ -501,87 +501,103 @@ async def oral_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# ── Oral progress save/load ──────────────────────────────────────────
+# ── Progress save/load (oral + poster, with named saves) ────────────
 
-@app.post("/api/oral/progress")
-async def save_oral_progress(request: Request):
-    """Save oral session editing progress to a JSON file."""
+import re as _re
+
+
+def _safe_save_name(name: str) -> str:
+    """Sanitize a save name for use as a filename component."""
+    name = _re.sub(r'[^\w\-]', '_', name.strip())[:60]
+    return name or "default"
+
+
+def _progress_dir(conf: str, mode: str) -> Path:
+    d = PROJECT_ROOT / "data" / conf / f"{mode}_progress"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.get("/api/{mode}/progress/list")
+async def list_progress_saves(mode: str, conference: str = Query("SIGIR25")):
+    """List all named saves for a mode (oral/poster)."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
+    try:
+        conferences = discover_conferences()
+        conf = _resolve_conference(conference, conferences)
+        d = _progress_dir(conf, mode)
+        saves = []
+        for f in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            saves.append({
+                "name": f.stem,
+                "modified": f.stat().st_mtime,
+                "size": f.stat().st_size,
+            })
+        # Also check legacy single-file progress
+        legacy = PROJECT_ROOT / "data" / conf / f"{mode}_progress.json"
+        if legacy.is_file() and not (d / "default.json").is_file():
+            saves.insert(0, {
+                "name": "default (legacy)",
+                "modified": legacy.stat().st_mtime,
+                "size": legacy.stat().st_size,
+            })
+        return {"success": True, "saves": saves}
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/{mode}/progress")
+async def save_progress(mode: str, request: Request):
+    """Save progress with an optional name."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
     try:
         body = await request.json()
         conference = body.get("conference", "SIGIR25")
         result_data = body.get("result")
+        save_name = _safe_save_name(body.get("name", "default"))
         if not result_data:
             return {"success": False, "error": "No result data provided"}
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
-        path = PROJECT_ROOT / "data" / conf / "oral_progress.json"
+        d = _progress_dir(conf, mode)
+        path = d / f"{save_name}.json"
         import json
         with open(path, "w", encoding="utf-8") as f:
             json.dump(result_data, f, ensure_ascii=False, indent=2)
-        logger.info(f"Oral progress saved: {path}")
-        return {"success": True, "path": str(path)}
+        logger.info(f"{mode} progress saved: {path}")
+        return {"success": True, "path": str(path), "name": save_name}
     except Exception as e:
-        logger.error(f"oral/progress save error: {e}\n{traceback.format_exc()}")
+        logger.error(f"{mode}/progress save error: {e}\n{traceback.format_exc()}")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
-@app.get("/api/oral/progress")
-async def load_oral_progress(conference: str = Query("SIGIR25")):
-    """Load oral session editing progress from a JSON file if it exists."""
+@app.get("/api/{mode}/progress")
+async def load_progress(mode: str, conference: str = Query("SIGIR25"),
+                        name: str = Query("default")):
+    """Load a named progress save."""
+    if mode not in ("oral", "poster"):
+        return JSONResponse({"error": "Invalid mode"}, status_code=400)
     try:
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
-        path = PROJECT_ROOT / "data" / conf / "oral_progress.json"
+        save_name = _safe_save_name(name)
+        d = _progress_dir(conf, mode)
+        path = d / f"{save_name}.json"
+        # Fall back to legacy single-file if named file doesn't exist
         if not path.is_file():
-            return {"success": False, "error": "No saved progress found"}
+            legacy = PROJECT_ROOT / "data" / conf / f"{mode}_progress.json"
+            if legacy.is_file():
+                path = legacy
+            else:
+                return {"success": False, "error": f"No save named '{save_name}' found"}
         import json
         with open(path, "r", encoding="utf-8") as f:
             result_data = json.load(f)
-        return {"success": True, "result": result_data}
+        return {"success": True, "result": result_data, "name": save_name}
     except Exception as e:
-        logger.error(f"oral/progress load error: {e}\n{traceback.format_exc()}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-
-# ── Poster progress save/load ─────────────────────────────────────────
-
-@app.post("/api/poster/progress")
-async def save_poster_progress(request: Request):
-    """Save poster session editing progress to a JSON file."""
-    try:
-        body = await request.json()
-        conference = body.get("conference", "SIGIR25")
-        result_data = body.get("result")
-        if not result_data:
-            return {"success": False, "error": "No result data provided"}
-        conferences = discover_conferences()
-        conf = _resolve_conference(conference, conferences)
-        path = PROJECT_ROOT / "data" / conf / "poster_progress.json"
-        import json
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(result_data, f, ensure_ascii=False, indent=2)
-        logger.info(f"Poster progress saved: {path}")
-        return {"success": True, "path": str(path)}
-    except Exception as e:
-        logger.error(f"poster/progress save error: {e}\n{traceback.format_exc()}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
-
-@app.get("/api/poster/progress")
-async def load_poster_progress(conference: str = Query("SIGIR25")):
-    """Load poster session editing progress from a JSON file if it exists."""
-    try:
-        conferences = discover_conferences()
-        conf = _resolve_conference(conference, conferences)
-        path = PROJECT_ROOT / "data" / conf / "poster_progress.json"
-        if not path.is_file():
-            return {"success": False, "error": "No saved progress found"}
-        import json
-        with open(path, "r", encoding="utf-8") as f:
-            result_data = json.load(f)
-        return {"success": True, "result": result_data}
-    except Exception as e:
-        logger.error(f"poster/progress load error: {e}\n{traceback.format_exc()}")
+        logger.error(f"{mode}/progress load error: {e}\n{traceback.format_exc()}")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 

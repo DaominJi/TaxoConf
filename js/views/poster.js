@@ -34,6 +34,92 @@ import {
   exportMetaCard,
 } from "../export-template.js";
 import { collapseSetupPanel, updateSetupSummary } from "../router.js";
+import { showToast } from "../toast.js";
+
+/* ═══════════════════ Save / restore progress ═══════════════════ */
+
+function localStorageKey() {
+  return `taxoconf_poster_progress_${state.poster.conference || "default"}`;
+}
+
+function autoSavePosterProgress() {
+  try {
+    const result = state.poster.result;
+    if (!result) return;
+    localStorage.setItem(localStorageKey(), JSON.stringify(result));
+  } catch (_) {}
+}
+
+function getLocalSavedProgress() {
+  try {
+    const raw = localStorage.getItem(localStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+function clearLocalSavedProgress() {
+  try { localStorage.removeItem(localStorageKey()); } catch (_) {}
+}
+
+function restoreLocalProgress() {
+  const saved = getLocalSavedProgress();
+  if (!saved) return false;
+  state.poster.result = saved;
+  renderPosterResults();
+  return true;
+}
+
+export async function savePosterProgressToServer() {
+  const result = state.poster.result;
+  if (!result) { alert("No poster result to save."); return; }
+  const name = prompt("Save name:", `poster_${new Date().toISOString().slice(0, 10)}`);
+  if (!name) return;
+  try {
+    const resp = await apiPost("/poster/progress", {
+      conference: state.poster.conference,
+      result: result,
+      name: name,
+    });
+    if (resp.success) {
+      showToast(`Saved as "${resp.name || name}".`);
+    } else {
+      alert("Failed to save: " + (resp.error || "Unknown error"));
+    }
+  } catch (e) {
+    alert("Save failed: " + e.message);
+  }
+}
+
+export async function loadPosterProgressFromServer() {
+  try {
+    const listResp = await apiGet(`/poster/progress/list?conference=${encodeURIComponent(state.poster.conference)}`);
+    if (!listResp.success || !listResp.saves || listResp.saves.length === 0) {
+      showToast("No saved progress found on server.");
+      return false;
+    }
+    const saves = listResp.saves;
+    const choices = saves.map((s, i) => `${i + 1}. ${s.name} (${new Date(s.modified * 1000).toLocaleString()})`).join("\n");
+    const pick = prompt(`Available saves:\n${choices}\n\nEnter number to load:`, "1");
+    if (!pick) return false;
+    const idx = parseInt(pick, 10) - 1;
+    if (idx < 0 || idx >= saves.length) { alert("Invalid selection."); return false; }
+    const chosen = saves[idx].name.replace(" (legacy)", "");
+
+    const resp = await apiGet(`/poster/progress?conference=${encodeURIComponent(state.poster.conference)}&name=${encodeURIComponent(chosen)}`);
+    if (resp.success && resp.result) {
+      state.poster.result = resp.result;
+      autoSavePosterProgress();
+      renderPosterResults();
+      showToast(`Loaded "${chosen}".`);
+      return true;
+    }
+    showToast("Failed to load save.");
+    return false;
+  } catch (e) {
+    alert("Load failed: " + e.message);
+    return false;
+  }
+}
 
 /* ═══════════════════ ID / label helpers ═══════════════════ */
 
@@ -75,6 +161,7 @@ function setPosterSessionFields(sessionId, fields) {
     trackLabel: String(fields.trackLabel || "").trim(),
     location: String(fields.location || "").trim(),
   });
+  autoSavePosterProgress();
   renderPosterResults();
 }
 
@@ -1078,6 +1165,8 @@ export function buildPosterExportCsv() {
 
 export function setupPosterEvents() {
   document.getElementById("runPosterBtn").addEventListener("click", runPosterOrganization);
+  document.getElementById("savePosterProgressBtn").addEventListener("click", savePosterProgressToServer);
+  document.getElementById("loadPosterProgressBtn").addEventListener("click", loadPosterProgressFromServer);
   document.getElementById("posterConferenceSelect").addEventListener("change", (e) => {
     state.poster.conference = e.target.value;
     state.poster.result = null;
