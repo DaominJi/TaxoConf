@@ -117,7 +117,32 @@ export async function createWorkspace() {
   btn.textContent = "Creating...";
 
   try {
-    /* 1. Create workspace with mode */
+    /* 1. Validate paper file BEFORE creating workspace */
+    let papers = null;
+    const fileInput = document.getElementById("wsNewPapersFile");
+    if (fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const text = await file.text();
+      try {
+        if (file.name.toLowerCase().endsWith(".csv")) {
+          papers = parseCSVtoPapers(text);
+        } else {
+          papers = JSON.parse(text);
+        }
+      } catch (parseErr) {
+        throw new Error(`Invalid file format: ${parseErr.message}`);
+      }
+      if (!Array.isArray(papers) || papers.length === 0) {
+        throw new Error("File contains no papers. Expected a non-empty array of {id, title, authors}.");
+      }
+      /* Check that papers have required fields */
+      const first = papers[0];
+      if (!first.title) {
+        throw new Error("Papers must have at least a 'title' field. Check your file format.");
+      }
+    }
+
+    /* 2. Create workspace (only after validation passes) */
     const res = await fetch(`${API_BASE}/workspaces`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -126,17 +151,8 @@ export async function createWorkspace() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to create workspace");
 
-    /* 2. Upload papers if a file was selected */
-    const fileInput = document.getElementById("wsNewPapersFile");
-    if (fileInput.files && fileInput.files[0]) {
-      const file = fileInput.files[0];
-      const text = await file.text();
-      let papers;
-      if (file.name.toLowerCase().endsWith(".csv")) {
-        papers = parseCSVtoPapers(text);
-      } else {
-        papers = JSON.parse(text);
-      }
+    /* 3. Upload papers if validated */
+    if (papers) {
       const safeName = data.workspace?.name || name;
       const uploadRes = await fetch(`${API_BASE}/workspaces/${encodeURIComponent(safeName)}/upload`, {
         method: "POST",
