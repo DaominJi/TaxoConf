@@ -1461,9 +1461,15 @@ async def test_llm_connection(request: Request):
 @app.get("/{filepath:path}")
 async def serve_static(filepath: str):
     """Serve static assets (CSS, JS, images). Registered last so API routes win."""
-    full_path = PROJECT_ROOT / filepath
+    # Strip query strings (e.g. ?v=2 cache busting)
+    clean_path = filepath.split("?")[0] if "?" in filepath else filepath
+    full_path = PROJECT_ROOT / clean_path
     if full_path.is_file() and full_path.suffix in STATIC_EXTENSIONS:
-        return FileResponse(str(full_path))
+        resp = FileResponse(str(full_path))
+        # Prevent aggressive caching of JS/CSS during development
+        if full_path.suffix in (".js", ".css"):
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
     return JSONResponse({"error": "Not found"}, status_code=404)
 
 
