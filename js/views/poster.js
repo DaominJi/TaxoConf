@@ -790,8 +790,9 @@ export function renderPosterSessionModal() {
     </div>
   `;
 
-  /* Event delegation */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._posterSessionHandler) body.removeEventListener("click", body._posterSessionHandler);
+  body._posterSessionHandler = (e) => {
     const openBtn = e.target.closest("button[data-action='open-poster-session']");
     if (openBtn) {
       openPosterSessionModal(openBtn.getAttribute("data-session-id"));
@@ -824,7 +825,8 @@ export function renderPosterSessionModal() {
         location: body.querySelector(`input[data-poster-session-location-input="${sid}"]`)?.value || "",
       });
     }
-  });
+  };
+  body.addEventListener("click", body._posterSessionHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
@@ -895,8 +897,9 @@ export function renderPosterHardPaperModal() {
     </div>
   `;
 
-  /* Event delegation */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._posterHardPaperHandler) body.removeEventListener("click", body._posterHardPaperHandler);
+  body._posterHardPaperHandler = (e) => {
     const applyBtn = e.target.closest("button[data-action='apply-poster-hard-paper']");
     if (applyBtn) {
       const currentPaperId = applyBtn.getAttribute("data-paper-id");
@@ -917,7 +920,8 @@ export function renderPosterHardPaperModal() {
       closePosterHardPaperModal();
       openPosterSessionModal(sid);
     }
-  });
+  };
+  body.addEventListener("click", body._posterHardPaperHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");

@@ -673,8 +673,9 @@ export function renderOralSessionModal() {
     </div>
   `;
 
-  /* Event delegation for move and save buttons */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._oralSessionHandler) body.removeEventListener("click", body._oralSessionHandler);
+  body._oralSessionHandler = (e) => {
     const moveBtn = e.target.closest("button[data-action='move-oral-paper']");
     if (moveBtn) {
       const paperId = moveBtn.getAttribute("data-paper-id");
@@ -701,7 +702,8 @@ export function renderOralSessionModal() {
         location: body.querySelector(`input[data-oral-session-location-input="${sid}"]`)?.value || "",
       });
     }
-  });
+  };
+  body.addEventListener("click", body._oralSessionHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
@@ -772,8 +774,9 @@ export function renderOralHardPaperModal() {
     </div>
   `;
 
-  /* Event delegation */
-  body.addEventListener("click", (e) => {
+  /* Event delegation — replace previous listener to avoid stacking */
+  if (body._oralHardPaperHandler) body.removeEventListener("click", body._oralHardPaperHandler);
+  body._oralHardPaperHandler = (e) => {
     const applyBtn = e.target.closest("button[data-action='apply-oral-hard-paper']");
     if (applyBtn) {
       const currentPaperId = applyBtn.getAttribute("data-paper-id");
@@ -794,7 +797,8 @@ export function renderOralHardPaperModal() {
       closeOralHardPaperModal();
       openOralSessionModal(sid);
     }
-  });
+  };
+  body.addEventListener("click", body._oralHardPaperHandler);
 
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
