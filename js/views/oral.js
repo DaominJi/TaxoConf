@@ -503,7 +503,6 @@ function oralSchedulePreviewHtml(session) {
   }
   const paperIds = session.papers.slice(0, 5).map((paper) => escapeHtml(oralPaperId(paper))).join(", ");
   const meta = [
-    `Topics: ${escapeHtml(sessionTopicNames(session.papers, oralPaperDist, 2))}`,
     paperIds ? `Papers: ${paperIds}${session.papers.length > 5 ? ", ..." : ""}` : "",
     sessionTimeLabel(session) ? `Time: ${escapeHtml(sessionTimeLabel(session))}` : "",
     session.location ? `Location: ${escapeHtml(session.location)}` : "",
@@ -565,15 +564,15 @@ export function renderOralSessionModal() {
         </div>
         <div class="modal-field">
           <label>Date</label>
-          <input data-oral-session-date-input="${session.id}" type="text" value="${escapeHtml(session.sessionDate || "")}" placeholder="e.g. 2025-07-17">
+          <input data-oral-session-date-input="${session.id}" type="date" value="${escapeHtml(session.sessionDate || "")}">
         </div>
         <div class="modal-field">
           <label>Start Time</label>
-          <input data-oral-session-start-input="${session.id}" type="text" value="${escapeHtml(session.startTime || "")}" placeholder="e.g. 09:00">
+          <input data-oral-session-start-input="${session.id}" type="time" value="${escapeHtml(session.startTime || "")}">
         </div>
         <div class="modal-field">
           <label>End Time</label>
-          <input data-oral-session-end-input="${session.id}" type="text" value="${escapeHtml(session.endTime || "")}" placeholder="e.g. 10:30">
+          <input data-oral-session-end-input="${session.id}" type="time" value="${escapeHtml(session.endTime || "")}">
         </div>
         <div class="modal-field">
           <label>Room / Location</label>
@@ -805,13 +804,13 @@ export function renderOralResults() {
       <table>
         <thead>
           <tr>
-            <th>Time Slot</th>
+            <th class="grid-header-slot">Schedule</th>
             ${Array.from({ length: K }, (_, i) => {
               const track = i + 1;
               const loc = trackLocations[track] || "";
-              return `<th>
-                <div>Track ${track}</div>
-                <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room" title="Room / Location for Track ${track}">
+              return `<th class="grid-header-track">
+                <div class="grid-track-label">Track ${track}</div>
+                <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
               </th>`;
             }).join("")}
           </tr>
@@ -822,12 +821,21 @@ export function renderOralResults() {
             const st = slotTimes[slot] || {};
             return `
               <tr>
-                <td>
-                  <strong>Slot ${slot}</strong>
-                  <div class="grid-slot-meta">
-                    <input class="grid-inline-input" data-slot-date="${slot}" type="text" value="${escapeHtml(st.sessionDate || "")}" placeholder="Date" title="Date for Slot ${slot}">
-                    <input class="grid-inline-input" data-slot-start="${slot}" type="text" value="${escapeHtml(st.startTime || "")}" placeholder="Start" title="Start time">
-                    <input class="grid-inline-input" data-slot-end="${slot}" type="text" value="${escapeHtml(st.endTime || "")}" placeholder="End" title="End time">
+                <td class="grid-slot-cell">
+                  <div class="grid-slot-label">Slot ${slot}</div>
+                  <div class="grid-slot-fields">
+                    <label class="grid-field">
+                      <span>Date</span>
+                      <input class="grid-inline-input" data-slot-date="${slot}" type="date" value="${escapeHtml(st.sessionDate || "")}">
+                    </label>
+                    <label class="grid-field">
+                      <span>Start</span>
+                      <input class="grid-inline-input" data-slot-start="${slot}" type="time" value="${escapeHtml(st.startTime || "")}">
+                    </label>
+                    <label class="grid-field">
+                      <span>End</span>
+                      <input class="grid-inline-input" data-slot-end="${slot}" type="time" value="${escapeHtml(st.endTime || "")}">
+                    </label>
                   </div>
                 </td>
                 ${Array.from({ length: K }, (_, kIdx) => {

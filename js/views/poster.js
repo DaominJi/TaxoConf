@@ -873,9 +873,8 @@ export function renderPosterResults() {
     <div class="poster-grid-shell">
       <div class="poster-session-grid">
         ${result.sessions.map((session) => {
-          const topTopicNames = sessionTopicNames(session.papers, posterPaperDist, 2);
           const metaText = [
-            `${posterSessionLabel(session.id)} \u00b7 ${session.papers.length} papers \u00b7 ${topTopicNames}`,
+            `${posterSessionLabel(session.id)} \u00b7 ${session.papers.length} papers`,
             sessionTimeLabel(session) ? sessionTimeLabel(session) : "",
             session.location ? `Location: ${session.location}` : "",
           ].filter(Boolean).join(" \u00b7 ");

@@ -97,41 +97,93 @@
   font-size: 0.82rem;
 }
 
-/* ── Inline grid editing inputs ────────── */
+/* ── Inline grid editing ────────────────── */
+
+.grid-header-slot {
+  min-width: 160px;
+  vertical-align: bottom;
+}
+
+.grid-header-track {
+  vertical-align: bottom;
+}
+
+.grid-track-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.grid-slot-cell {
+  min-width: 160px;
+  vertical-align: top;
+  padding: 10px !important;
+}
+
+.grid-slot-label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+
+.grid-slot-fields {
+  display: grid;
+  gap: 6px;
+}
+
+.grid-field {
+  display: grid;
+  gap: 2px;
+}
+
+.grid-field span {
+  font-size: 0.65rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
 
 .grid-inline-input {
   display: block;
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
   font-family: inherit;
-  font-size: 0.72rem;
-  color: var(--ink-soft);
-  background: transparent;
-  transition: border-color 0.15s, background 0.15s;
-  margin-top: 3px;
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .grid-inline-input:hover {
-  border-color: var(--line);
-  background: rgba(255, 255, 255, 0.6);
+  border-color: #b8cfc9;
 }
 
 .grid-inline-input:focus {
   outline: none;
   border-color: var(--accent);
-  background: #fff;
-  color: var(--ink);
+  box-shadow: 0 0 0 2px rgba(19, 143, 139, 0.12);
 }
 
-.grid-slot-meta {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
+.grid-inline-input::placeholder {
+  color: #a0b5ae;
 }
 
-.grid-slot-meta .grid-inline-input {
-  flex: 1;
-  min-width: 0;
+/* Native date/time inputs styling */
+.grid-inline-input[type="date"],
+.grid-inline-input[type="time"] {
+  cursor: pointer;
+}
+
+.grid-inline-input[type="date"]::-webkit-calendar-picker-indicator,
+.grid-inline-input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.grid-inline-input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.grid-inline-input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
