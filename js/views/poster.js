@@ -965,9 +965,7 @@ export function renderPosterResults() {
   const lastMilePanel = document.getElementById("posterLastMilePanel");
   const exportBtn = document.getElementById("exportPosterBtn");
   const result = state.poster.result;
-  const loadingBanner = state.poster.isRunning
-    ? loadingHtml("Optimizing the poster arrangement. This can take a bit longer on the full demo data.")
-    : "";
+  const loadingBanner = "";  /* Progress shown in toolbar spinner */
   posterLayoutInputState();
   renderPosterCapacityNotice();
   if (exportBtn) exportBtn.disabled = state.poster.isRunning || !result;

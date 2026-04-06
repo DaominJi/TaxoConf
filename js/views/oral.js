@@ -842,9 +842,7 @@ export function renderOralResults() {
   const exportBtn = document.getElementById("exportOralBtn");
 
   const result = state.oral.result;
-  const loadingBanner = state.oral.isRunning
-    ? loadingHtml("Optimizing the oral schedule. This may take a short while on the full demo data.")
-    : "";
+  const loadingBanner = "";  /* Progress shown in toolbar spinner */
   renderOralCapacityNotice();
   if (exportBtn) exportBtn.disabled = state.oral.isRunning || !result;
 
