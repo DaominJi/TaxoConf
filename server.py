@@ -452,12 +452,11 @@ async def oral_run(request: Request):
         result = run_oral_organization(papers, taxonomy_root)
 
         # Context-aware session naming (bottom-up cascade)
-        if has_api_key:
-            try:
-                naming_llm = LLMClient()
-                name_sessions(result.sessions, taxonomy_root, papers_map, naming_llm)
-            except Exception as e:
-                logger.warning(f"Session naming failed, keeping original names: {e}")
+        try:
+            naming_llm = LLMClient()
+            name_sessions(result.sessions, taxonomy_root, papers_map, naming_llm)
+        except Exception as e:
+            logger.warning(f"Session naming failed, keeping original names: {e}")
 
         # Build response in the format the frontend expects.
         # The frontend renders a 2-D grid (slot × track) and looks up sessions
@@ -808,14 +807,11 @@ async def poster_run(request: Request):
         )
 
         # Context-aware session naming (bottom-up cascade)
-        if has_api_key and poster_result.org_result:
+        if poster_result.org_result:
             try:
                 naming_llm = LLMClient()
-                # Poster sessions are in org_result.sessions; poster_sessions
-                # have a .name that we need to update too
                 name_sessions(poster_result.org_result.sessions, taxonomy_root,
                               papers_map, naming_llm)
-                # Sync names to poster_sessions
                 org_session_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
                 for ps in poster_result.poster_sessions:
                     if ps.session_id in org_session_names:
