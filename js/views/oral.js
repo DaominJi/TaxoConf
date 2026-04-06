@@ -300,7 +300,7 @@ function setTrackLocation(track, location) {
 function ensureTrackNames(result, K) {
   if (!result.trackNames || result.trackNames.length < K) {
     result.trackNames = Array.from({ length: K }, (_, i) =>
-      (result.trackNames && result.trackNames[i]) || `Location ${String.fromCharCode(65 + i)}`
+      (result.trackNames && result.trackNames[i]) || `Track ${String.fromCharCode(65 + i)}`
     );
   }
   return result.trackNames;
@@ -900,8 +900,8 @@ export function renderOralResults() {
                 const track = i + 1;
                 const loc = trackLocations[track] || "";
                 return `<th class="grid-header-track">
-                  <input class="grid-inline-input grid-track-name" data-track-name="${track}" type="text" value="${escapeHtml(names[i])}" placeholder="Track name">
-                  <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
+                  <input class="grid-inline-input grid-track-name" data-track-name="${track}" type="text" value="${escapeHtml(names[i])}" placeholder="e.g. Full Paper Track">
+                  <input class="grid-inline-input grid-track-room" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
                 </th>`;
               }).join("");
             })()}
