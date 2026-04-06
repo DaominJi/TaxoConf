@@ -468,12 +468,14 @@ export async function runOralOrganization() {
   setRunState("oral", true, "Computing conflict-free sessions and optimizing within-session similarity...");
   renderOralResults();
   try {
+    const useAbstracts = document.getElementById("oralUseAbstractsInput")?.checked ?? true;
     const resp = await apiPost("/oral/run", {
       conference: state.oral.conference,
       parallel_sessions: state.oral.parallelSessions,
       time_slots: state.oral.timeSlots,
       max_per_session: state.oral.maxPerSession,
       min_per_session: state.oral.minPerSession,
+      use_abstracts: useAbstracts,
     });
     state.oral.result = prepareOralResult(requireApiResult(resp, "Oral organization"));
     state.oral.activeSessionId = null;

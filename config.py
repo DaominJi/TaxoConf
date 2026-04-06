@@ -25,6 +25,9 @@ MAX_CHILDREN = 8                     # Max children per taxonomy node
 TOKEN_THRESHOLD = 60000              # Estimated token budget; if total input
                                      # exceeds this, use titles only.
 TOKEN_EST_CHARS_PER_TOKEN = 4        # Rough char-to-token ratio
+USE_ABSTRACTS = True                 # Include abstracts in taxonomy construction
+                                     # (falls back to titles-only if exceeding
+                                     # TOKEN_THRESHOLD even when enabled)
 
 # ─── Oral Session Formation ─────────────────────────────────────────
 SESSION_MIN = 3                      # Minimum papers per oral session

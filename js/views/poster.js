@@ -543,6 +543,7 @@ export async function runPosterOrganization() {
   setRunState("poster", true, "Computing poster sessions and arranging nearby boards for similar papers...");
   renderPosterResults();
   try {
+    const useAbstracts = document.getElementById("posterUseAbstractsInput")?.checked ?? true;
     const resp = await apiPost("/poster/run", {
       conference: state.poster.conference,
       layout_type: state.poster.layoutType,
@@ -552,6 +553,7 @@ export async function runPosterOrganization() {
       session_count: state.poster.sessionCount,
       prevent_same_presenter: state.poster.preventSamePresenter,
       optimize_within_layout: state.poster.optimizeWithinLayout,
+      use_abstracts: useAbstracts,
     });
     state.poster.result = preparePosterResult(requireApiResult(resp, "Poster organization"));
     state.poster.optimizeWithinLayout = Boolean(state.poster.result && state.poster.result.optimizeWithinLayout);

@@ -40,7 +40,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import config
 from models import Paper, TaxonomyNode, Session, PosterSession, FloorPlanType
-from taxonomy_builder import (TaxonomyBuilder, LLMClient, collect_leaves,
+from llm_client import LLMClient
+from taxonomy_builder import (TaxonomyBuilder, collect_leaves,
                               print_taxonomy)
 from session_organizer import run_oral_organization, OrganizationResult
 from poster_organizer import run_poster_pipeline, PosterOrganizationResult
@@ -195,7 +196,8 @@ def get_taxonomy(conference: str, papers: list[Paper]) -> TaxonomyNode:
         if has_api_key:
             logger.info(f"Building LLM taxonomy for {conference}...")
             llm = LLMClient()
-            builder = TaxonomyBuilder(papers, llm=llm)
+            builder = TaxonomyBuilder(papers, llm=llm,
+                                      use_abstracts=getattr(config, "USE_ABSTRACTS", True))
             root = builder.build()
         else:
             logger.info(f"No LLM API key found; building automatic taxonomy for {conference}...")
@@ -426,6 +428,7 @@ async def oral_run(request: Request):
         time_slots = int(body.get("time_slots", 19))
         max_per_session = int(body.get("max_per_session", 4))
         min_per_session = int(body.get("min_per_session", 3))
+        use_abstracts = body.get("use_abstracts", True)
 
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
@@ -435,6 +438,7 @@ async def oral_run(request: Request):
         config.SESSION_MAX = max_per_session
         config.NUM_SLOTS = time_slots
         config.NUM_PARALLEL_TRACKS = parallel_sessions
+        config.USE_ABSTRACTS = bool(use_abstracts)
 
         papers = get_papers(conf)
         papers_map = {p.id: p for p in papers}
@@ -751,6 +755,7 @@ async def poster_run(request: Request):
         session_count = int(body.get("session_count", 44))
         prevent_same_presenter = bool(body.get("prevent_same_presenter", False))
         optimize_within = bool(body.get("optimize_within_layout", True))
+        use_abstracts = body.get("use_abstracts", True)
 
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
@@ -769,6 +774,7 @@ async def poster_run(request: Request):
         config.POSTER_FLOOR_PLAN = layout_type
         config.POSTER_RECT_COLS = cols
         config.POSTER_PROXIMITY = optimize_within
+        config.USE_ABSTRACTS = bool(use_abstracts)
         config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
 
         papers = get_papers(conf)
