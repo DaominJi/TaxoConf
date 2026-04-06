@@ -45,6 +45,7 @@ from taxonomy_builder import (TaxonomyBuilder, collect_leaves,
                               print_taxonomy)
 from session_organizer import run_oral_organization, OrganizationResult
 from poster_organizer import run_poster_pipeline, PosterOrganizationResult
+from session_namer import name_sessions
 from similarity import SimilarityEngine
 from token_tracker import get_global_tracker, reset_global_tracker
 from session_reviewer import review_sessions
@@ -450,6 +451,14 @@ async def oral_run(request: Request):
 
         result = run_oral_organization(papers, taxonomy_root)
 
+        # Context-aware session naming (bottom-up cascade)
+        if has_api_key:
+            try:
+                naming_llm = LLMClient()
+                name_sessions(result.sessions, taxonomy_root, papers_map, naming_llm)
+            except Exception as e:
+                logger.warning(f"Session naming failed, keeping original names: {e}")
+
         # Build response in the format the frontend expects.
         # The frontend renders a 2-D grid (slot × track) and looks up sessions
         # by id = "slot_{slot}_track_{track}" (both 1-indexed).  The backend
@@ -797,6 +806,22 @@ async def poster_run(request: Request):
             num_slots=config.POSTER_NUM_SLOTS,
             num_parallel=config.POSTER_NUM_PARALLEL,
         )
+
+        # Context-aware session naming (bottom-up cascade)
+        if has_api_key and poster_result.org_result:
+            try:
+                naming_llm = LLMClient()
+                # Poster sessions are in org_result.sessions; poster_sessions
+                # have a .name that we need to update too
+                name_sessions(poster_result.org_result.sessions, taxonomy_root,
+                              papers_map, naming_llm)
+                # Sync names to poster_sessions
+                org_session_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                for ps in poster_result.poster_sessions:
+                    if ps.session_id in org_session_names:
+                        ps.name = org_session_names[ps.session_id]
+            except Exception as e:
+                logger.warning(f"Poster session naming failed, keeping original names: {e}")
 
         # Build response
         sessions_out = []
