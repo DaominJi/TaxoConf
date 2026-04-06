@@ -19,7 +19,7 @@ import {
   escapeHtml,
   formatNum,
   loadingHtml,
-  setRunState,
+  setRunState, updateRunMessage,
   renderConferenceSelect,
   ensureSessionMetadata,
   sessionSpeakersChairLabel,
@@ -540,8 +540,24 @@ export async function runPosterOrganization() {
   state.poster.isRunning = true;
   state.poster.activeSessionId = null;
   state.poster.activeHardPaperId = null;
-  setRunState("poster", true, "Computing poster sessions and arranging nearby boards for similar papers...");
+  setRunState("poster", true, "Preparing...");
   renderPosterResults();
+
+  /* Progress ticker */
+  const progressSteps = [
+    { delay: 0, msg: "Step 1/7: Building paper similarity matrix..." },
+    { delay: 5000, msg: "Step 2/7: Constructing topic taxonomy via LLM..." },
+    { delay: 20000, msg: "Step 3/7: Forming poster sessions from taxonomy..." },
+    { delay: 35000, msg: "Step 4/7: Scheduling sessions into time slots..." },
+    { delay: 45000, msg: "Step 5/7: Optimizing board layout for topical proximity..." },
+    { delay: 60000, msg: "Step 6/7: Generating session names (bottom-up cascade)..." },
+    { delay: 90000, msg: "Step 7/7: Reviewing sessions for misplaced papers..." },
+    { delay: 130000, msg: "Still working... large conferences may take a few minutes." },
+  ];
+  const progressTimers = progressSteps.map(s =>
+    setTimeout(() => updateRunMessage("poster", s.msg), s.delay)
+  );
+
   try {
     const useAbstracts = document.getElementById("posterUseAbstractsInput")?.checked ?? true;
     const resp = await apiPost("/poster/run", {
@@ -570,6 +586,7 @@ export async function runPosterOrganization() {
   } catch (err) {
     alert(`Poster organization backend error: ${err.message}`);
   } finally {
+    progressTimers.forEach(t => clearTimeout(t));
     state.poster.isRunning = false;
     setRunState("poster", false);
     renderPosterResults();

@@ -93,20 +93,20 @@ export function setRunState(task, isRunning, message) {
         buttonId: "runAssignmentBtn",
         statusId: "assignmentRunStatus",
         defaultLabel: "Run Assignment",
-        runningLabel: "Running Assignment..."
+        runningLabel: "Running..."
       }
     : task === "oral"
       ? {
           buttonId: "runOralBtn",
           statusId: "oralRunStatus",
           defaultLabel: "Run Oral Organization",
-          runningLabel: "Running Oral Organization..."
+          runningLabel: "Running..."
         }
       : {
           buttonId: "runPosterBtn",
           statusId: "posterRunStatus",
           defaultLabel: "Run Poster Organization",
-          runningLabel: "Running Poster Organization..."
+          runningLabel: "Running..."
         };
   const button = document.getElementById(config.buttonId);
   const status = document.getElementById(config.statusId);
@@ -117,6 +117,16 @@ export function setRunState(task, isRunning, message) {
   status.innerHTML = isRunning
     ? `<span class="run-spinner" aria-hidden="true"></span><span>${message}</span>`
     : "";
+}
+
+/** Update only the message text of an already-visible run status. */
+export function updateRunMessage(task, message) {
+  const statusId = task === "assignment" ? "assignmentRunStatus"
+    : task === "oral" ? "oralRunStatus" : "posterRunStatus";
+  const status = document.getElementById(statusId);
+  if (!status) return;
+  const span = status.querySelector("span:last-child");
+  if (span) span.textContent = message;
 }
 
 export function parseJsonFile(file, onSuccess) {

@@ -18,7 +18,7 @@ import {
   escapeHtml,
   formatNum,
   loadingHtml,
-  setRunState,
+  setRunState, updateRunMessage,
   renderConferenceSelect,
   ensureSessionMetadata,
   sessionSpeakersChairLabel,
@@ -465,8 +465,23 @@ export async function runOralOrganization() {
   state.oral.isRunning = true;
   state.oral.activeSessionId = null;
   state.oral.activeHardPaperId = null;
-  setRunState("oral", true, "Computing conflict-free sessions and optimizing within-session similarity...");
+  setRunState("oral", true, "Preparing...");
   renderOralResults();
+
+  /* Progress ticker: cycle through pipeline stage messages */
+  const progressSteps = [
+    { delay: 0, msg: "Step 1/6: Building paper similarity matrix..." },
+    { delay: 5000, msg: "Step 2/6: Constructing topic taxonomy via LLM..." },
+    { delay: 20000, msg: "Step 3/6: Forming sessions from taxonomy leaves..." },
+    { delay: 35000, msg: "Step 4/6: Scheduling sessions into time slots (conflict avoidance)..." },
+    { delay: 50000, msg: "Step 5/6: Generating session names (bottom-up cascade)..." },
+    { delay: 80000, msg: "Step 6/6: Reviewing sessions for misplaced papers..." },
+    { delay: 120000, msg: "Still working... large conferences may take a few minutes." },
+  ];
+  const progressTimers = progressSteps.map(s =>
+    setTimeout(() => updateRunMessage("oral", s.msg), s.delay)
+  );
+
   try {
     const useAbstracts = document.getElementById("oralUseAbstractsInput")?.checked ?? true;
     const resp = await apiPost("/oral/run", {
@@ -491,6 +506,7 @@ export async function runOralOrganization() {
   } catch (err) {
     alert(`Oral organization backend error: ${err.message}`);
   } finally {
+    progressTimers.forEach(t => clearTimeout(t));
     state.oral.isRunning = false;
     setRunState("oral", false);
     renderOralResults();
