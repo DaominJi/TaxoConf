@@ -51,9 +51,11 @@ class LLMClient:
             self._init_anthropic()
         elif self.provider == "xai":
             self._init_xai()
+        elif self.provider == "openrouter":
+            self._init_openrouter()
         else:
             raise ValueError(f"Unknown LLM provider: {self.provider!r}. "
-                             f"Supported: openai, google, anthropic, xai")
+                             f"Supported: openai, google, anthropic, xai, openrouter")
 
     def _init_openai(self):
         """Initialize OpenAI client (uses OPENAI_API_KEY env var)."""
@@ -98,6 +100,23 @@ class LLMClient:
         self.client = OpenAI(api_key=api_key,
                              base_url="https://api.x.ai/v1")
 
+    def _init_openrouter(self):
+        """Initialize OpenRouter client (uses OPENROUTER_API_KEY env var).
+
+        OpenRouter provides a unified OpenAI-compatible API for 300+ models
+        across all major providers (OpenAI, Anthropic, Google, etc.).
+        """
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError("openai package required for OpenRouter provider. "
+                              "Install with: pip install openai")
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY environment variable required")
+        self.client = OpenAI(api_key=api_key,
+                             base_url="https://openrouter.ai/api/v1")
+
     # -- Unified chat interface --
 
     def chat(self, system: str, user: str, call_label: str = "") -> str:
@@ -108,7 +127,7 @@ class LLMClient:
         """
         for attempt in range(config.LLM_MAX_RETRIES):
             try:
-                if self.provider == "openai" or self.provider == "xai":
+                if self.provider in ("openai", "xai", "openrouter"):
                     return self._chat_openai(system, user, call_label)
                 elif self.provider == "google":
                     return self._chat_google(system, user, call_label)

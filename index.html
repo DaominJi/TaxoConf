@@ -603,6 +603,7 @@
               <div class="control-group">
                 <label class="control-label" for="settingsProvider">Provider <span id="settingsKeyStatus" style="font-weight:normal;font-size:0.75rem;margin-left:4px"></span></label>
                 <select id="settingsProvider">
+                  <option value="openrouter">OpenRouter (all providers)</option>
                   <option value="openai">OpenAI</option>
                   <option value="google">Google Gemini</option>
                   <option value="anthropic">Anthropic Claude</option>
@@ -612,6 +613,7 @@
               <div class="control-group">
                 <label class="control-label" for="settingsModel">Model</label>
                 <select id="settingsModel"></select>
+                <div id="settingsModelPricing" class="tiny" style="margin-top:4px;color:var(--ink-soft)"></div>
               </div>
             </div>
             <div class="control-group" style="margin-top:8px">

@@ -15,6 +15,7 @@ export const PROVIDER_KEY_PLACEHOLDERS = {
   google:    "AI...",
   anthropic: "sk-ant-...",
   xai:       "xai-...",
+  openrouter: "sk-or-...",
 };
 
 export const PROVIDER_MODELS = {
@@ -22,25 +23,62 @@ export const PROVIDER_MODELS = {
   google:    ["gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"],
   anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-opus-4-6", "claude-opus-4-5", "claude-haiku-4-5"],
   xai:       ["grok-3-mini", "grok-3", "grok-4", "grok-4-fast"],
+  openrouter: ["openai/gpt-4o", "openai/gpt-4.1", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash"],
 };
 
 /* Tracks which providers have API keys configured (populated by loadSettings) */
 export let _apiKeysStatus = {};
 
+/* Cached pricing data from OpenRouter (model_id -> {prompt, completion}) */
+let _modelPricingCache = {};
+
 /* ═══════════════════ Internal helpers ═══════════════════ */
 
-function _populateModelSelect(models, keepValue) {
+function _populateModelSelect(models, keepValue, pricingList) {
   const sel = document.getElementById("settingsModel");
   const prev = keepValue || sel.value;
   sel.innerHTML = "";
+
+  // Build pricing lookup if provided
+  if (pricingList && Array.isArray(pricingList)) {
+    pricingList.forEach((m) => {
+      _modelPricingCache[m.id] = {
+        prompt: m.prompt_price_per_1m,
+        completion: m.completion_price_per_1m,
+        name: m.name || m.id,
+        context: m.context_length || 0,
+      };
+    });
+  }
+
   models.forEach((m) => {
     const opt = document.createElement("option");
     opt.value = m;
-    opt.textContent = m;
+    const pricing = _modelPricingCache[m];
+    if (pricing && (pricing.prompt > 0 || pricing.completion > 0)) {
+      opt.textContent = `${m}  ($${pricing.prompt}/${pricing.completion} per 1M tokens)`;
+    } else {
+      opt.textContent = m;
+    }
     sel.appendChild(opt);
   });
   if (models.includes(prev)) {
     sel.value = prev;
+  }
+  _updatePricingDisplay();
+}
+
+function _updatePricingDisplay() {
+  const sel = document.getElementById("settingsModel");
+  const el = document.getElementById("settingsModelPricing");
+  if (!el || !sel) return;
+  const modelId = sel.value;
+  const p = _modelPricingCache[modelId];
+  if (p && (p.prompt > 0 || p.completion > 0)) {
+    const ctx = p.context ? ` | Context: ${(p.context / 1000).toFixed(0)}K tokens` : "";
+    el.innerHTML = `<strong>Pricing:</strong> $${p.prompt}/1M input, $${p.completion}/1M output${ctx}`;
+  } else {
+    el.textContent = "";
   }
 }
 
@@ -56,7 +94,7 @@ export async function updateModelDropdown(keepValue) {
     const res = await fetch(`${API_BASE}/models?provider=${prov}`);
     const data = await res.json();
     if (data.success && data.models && data.models.length > 0) {
-      _populateModelSelect(data.models, keepValue);
+      _populateModelSelect(data.models, keepValue, data.models_with_pricing);
       return;
     }
   } catch (_) {
@@ -211,6 +249,7 @@ export async function testLLMConnection() {
 
 export function setupSettingsEvents() {
   document.getElementById("settingsProvider").addEventListener("change", () => updateModelDropdown());
+  document.getElementById("settingsModel").addEventListener("change", _updatePricingDisplay);
   document.querySelectorAll('input[name="apiKeySource"]').forEach((r) => {
     r.addEventListener("change", toggleManualKeyRow);
   });

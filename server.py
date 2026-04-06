@@ -1370,6 +1370,7 @@ _PROVIDER_ENV_KEYS = {
     "google": "GOOGLE_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "xai": "XAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
 }
 
 # Models that Anthropic doesn't expose via a list endpoint
@@ -1439,6 +1440,36 @@ async def list_models(provider: str = None):
                 m.id for m in raw
                 if "grok" in m.id
             )
+
+        elif prov == "openrouter":
+            import httpx
+            headers = {"Authorization": f"Bearer {api_key}"}
+            resp = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15)
+            data = resp.json().get("data", [])
+            # Return models with pricing info
+            models_with_pricing = []
+            for m in data:
+                mid = m.get("id", "")
+                # Filter to text-capable models, skip image/audio-only
+                output_mods = []
+                arch = m.get("architecture", {})
+                if arch:
+                    output_mods = arch.get("output_modalities", [])
+                if output_mods and "text" not in output_mods:
+                    continue
+                pricing = m.get("pricing", {})
+                prompt_price = float(pricing.get("prompt", "0") or "0")
+                completion_price = float(pricing.get("completion", "0") or "0")
+                models_with_pricing.append({
+                    "id": mid,
+                    "name": m.get("name", mid),
+                    "context_length": m.get("context_length", 0),
+                    "prompt_price_per_1m": round(prompt_price * 1_000_000, 4),
+                    "completion_price_per_1m": round(completion_price * 1_000_000, 4),
+                })
+            models_with_pricing.sort(key=lambda x: x["id"])
+            return {"success": True, "models": [m["id"] for m in models_with_pricing],
+                    "models_with_pricing": models_with_pricing}
 
         else:
             return {"success": False, "error": f"Unknown provider: {prov}", "models": []}
