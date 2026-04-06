@@ -545,14 +545,15 @@ export async function runPosterOrganization() {
 
   /* Progress ticker */
   const progressSteps = [
-    { delay: 0, msg: "Step 1/7: Building paper similarity matrix..." },
-    { delay: 5000, msg: "Step 2/7: Constructing topic taxonomy via LLM..." },
-    { delay: 20000, msg: "Step 3/7: Forming poster sessions from taxonomy..." },
-    { delay: 35000, msg: "Step 4/7: Scheduling sessions into time slots..." },
-    { delay: 45000, msg: "Step 5/7: Optimizing board layout for topical proximity..." },
-    { delay: 60000, msg: "Step 6/7: Generating session names (bottom-up cascade)..." },
-    { delay: 90000, msg: "Step 7/7: Reviewing sessions for misplaced papers..." },
-    { delay: 130000, msg: "Still working... large conferences may take a few minutes." },
+    { delay: 0, msg: "Step 1/8: Building paper similarity matrix..." },
+    { delay: 5000, msg: "Step 2/8: Constructing topic taxonomy via LLM..." },
+    { delay: 20000, msg: "Step 3/8: Forming poster sessions from taxonomy..." },
+    { delay: 35000, msg: "Step 4/8: Scheduling sessions into time slots..." },
+    { delay: 45000, msg: "Step 5/8: Optimizing board layout for topical proximity..." },
+    { delay: 60000, msg: "Step 6/8: Generating session names (bottom-up cascade)..." },
+    { delay: 80000, msg: "Step 7/8: Normalizing session names (global consistency check)..." },
+    { delay: 95000, msg: "Step 8/8: Reviewing sessions for misplaced papers..." },
+    { delay: 140000, msg: "Still working... large conferences may take a few minutes." },
   ];
   const progressTimers = progressSteps.map(s =>
     setTimeout(() => updateRunMessage("poster", s.msg), s.delay)
