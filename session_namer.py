@@ -4,6 +4,7 @@ Context-aware session naming using taxonomy hierarchy.
 Implements a bottom-up naming cascade:
 1. Leaf sessions are named from their taxonomy path + paper titles
 2. Parent/merged sessions are named from their path + child session names + papers
+3. Global normalization ensures consistency and uniqueness across all sessions
 
 The taxonomy path (root > ... > current node) provides disambiguation context.
 Child session names (already finalized) provide sub-topic awareness.
@@ -20,6 +21,8 @@ from prompts.session_naming import (
     LEAF_USER_PROMPT,
     PARENT_SYSTEM_PROMPT,
     PARENT_USER_PROMPT,
+    NORMALIZE_SYSTEM_PROMPT,
+    NORMALIZE_USER_PROMPT,
 )
 
 logger = logging.getLogger(__name__)
@@ -224,4 +227,144 @@ def name_sessions(sessions: list[Session],
             session_names[nid] = session.name  # Keep original name
 
     logger.info(f"Session naming complete: {len(session_names)} sessions named")
+
+    # Global normalization pass
+    normalize_session_names(sessions, papers_map, llm)
+
+    return sessions
+
+
+# ────────────────────────────────────────────────────────────────────
+# Global normalization
+# ────────────────────────────────────────────────────────────────────
+
+_GENERIC_NAMES = {
+    "all papers", "miscellaneous", "various topics", "general session",
+    "other", "general", "mixed topics", "remaining papers",
+}
+
+
+def _find_problematic_sessions(sessions: list[Session],
+                                papers_map: dict[str, Paper]) -> list[Session]:
+    """Find sessions with generic names or near-duplicate names."""
+    problematic = []
+    names_seen: dict[str, list[Session]] = {}
+
+    for s in sessions:
+        lower = s.name.strip().lower()
+
+        # Generic names
+        if lower in _GENERIC_NAMES or lower.startswith("all "):
+            problematic.append(s)
+            continue
+
+        # Track for duplicate detection
+        names_seen.setdefault(lower, []).append(s)
+
+    # Near-duplicate detection: same name or one is a substring of another
+    for name, group in names_seen.items():
+        if len(group) > 1:
+            problematic.extend(group)
+            continue
+        # Check if this name is a substring of another
+        for other_name, other_group in names_seen.items():
+            if name != other_name and (name in other_name or other_name in name):
+                problematic.extend(group)
+                break
+
+    # Deduplicate
+    seen_ids = set()
+    unique = []
+    for s in problematic:
+        if s.session_id not in seen_ids:
+            seen_ids.add(s.session_id)
+            unique.append(s)
+
+    return unique
+
+
+def normalize_session_names(sessions: list[Session],
+                            papers_map: dict[str, Paper],
+                            llm: Optional[LLMClient] = None) -> list[Session]:
+    """Global normalization pass over all session names.
+
+    Fixes:
+    - Generic names ("All Papers", "Miscellaneous")
+    - Duplicate/near-duplicate names
+    - Inconsistent naming style
+
+    Single LLM call reviewing all names together.
+    """
+    if not sessions or len(sessions) < 2:
+        return sessions
+
+    if llm is None:
+        llm = LLMClient()
+
+    # Build session list text
+    sessions_text_lines = []
+    for s in sessions:
+        sessions_text_lines.append(
+            f"- [{s.session_id}] \"{s.name}\" ({len(s.paper_ids)} papers)"
+        )
+    sessions_text = "\n".join(sessions_text_lines)
+
+    # Find problematic sessions and include their papers for context
+    problematic = _find_problematic_sessions(sessions, papers_map)
+
+    if not problematic:
+        logger.info("Session name normalization: all names look good, skipping")
+        return sessions
+
+    logger.info(f"Session name normalization: {len(problematic)} sessions need review")
+
+    problematic_lines = []
+    for s in problematic:
+        papers_text = _format_papers_short(s.paper_ids, papers_map, max_papers=8)
+        problematic_lines.append(
+            f"Session [{s.session_id}] \"{s.name}\" — NEEDS REVISION:\n{papers_text}"
+        )
+    problematic_sessions_text = "\n\n".join(problematic_lines)
+
+    prompt = NORMALIZE_USER_PROMPT.format(
+        sessions_text=sessions_text,
+        problematic_sessions_text=problematic_sessions_text,
+    )
+
+    try:
+        raw = llm.chat(NORMALIZE_SYSTEM_PROMPT, prompt,
+                        call_label="normalize_session_names")
+
+        # Parse response
+        text = raw.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+
+        result = json.loads(text)
+        if not isinstance(result, dict):
+            logger.warning("Normalization returned non-dict, skipping")
+            return sessions
+
+        # Apply revisions
+        session_lookup = {s.session_id: s for s in sessions}
+        changes = 0
+        for sid, new_name in result.items():
+            new_name = str(new_name).strip()
+            if sid in session_lookup and new_name:
+                old_name = session_lookup[sid].name
+                if old_name != new_name:
+                    session_lookup[sid].name = new_name
+                    changes += 1
+                    logger.info(f"  Normalized: \"{old_name}\" -> \"{new_name}\"")
+
+        logger.info(f"Session name normalization complete: {changes} names revised")
+
+    except Exception as e:
+        logger.warning(f"Session name normalization failed: {e}")
+
     return sessions
