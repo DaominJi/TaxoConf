@@ -11,19 +11,20 @@ import { showToast } from "../toast.js";
 /* ═══════════════════ Constants ═══════════════════ */
 
 export const PROVIDER_KEY_PLACEHOLDERS = {
-  openai:    "sk-...",
-  google:    "AI...",
-  anthropic: "sk-ant-...",
-  xai:       "xai-...",
   openrouter: "sk-or-...",
 };
 
+/* Fallback models when OpenRouter API is not available (grouped by provider) */
 export const PROVIDER_MODELS = {
-  openai:    ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o3", "o4-mini"],
-  google:    ["gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"],
-  anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-opus-4-6", "claude-opus-4-5", "claude-haiku-4-5"],
-  xai:       ["grok-3-mini", "grok-3", "grok-4", "grok-4-fast"],
-  openrouter: ["openai/gpt-4o", "openai/gpt-4.1", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash"],
+  openrouter: [
+    "openai/gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4.1", "openai/gpt-4.1-mini",
+    "openai/gpt-5.4", "openai/o3-mini", "openai/o4-mini",
+    "anthropic/claude-sonnet-4-6", "anthropic/claude-sonnet-4-5",
+    "anthropic/claude-opus-4-6", "anthropic/claude-haiku-4-5",
+    "google/gemini-2.5-flash", "google/gemini-2.5-pro",
+    "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview",
+    "x-ai/grok-3", "x-ai/grok-4",
+  ],
 };
 
 /* Tracks which providers have API keys configured (populated by loadSettings) */
@@ -51,17 +52,63 @@ function _populateModelSelect(models, keepValue, pricingList) {
     });
   }
 
+  // Group models by provider prefix (e.g., "openai/gpt-4o" → "OpenAI")
+  const providerNames = {
+    openai: "OpenAI", anthropic: "Anthropic", google: "Google",
+    "x-ai": "xAI", meta: "Meta", deepseek: "DeepSeek",
+    mistralai: "Mistral", cohere: "Cohere", qwen: "Qwen",
+  };
+  const groups = {};
+  const ungrouped = [];
   models.forEach((m) => {
+    const slash = m.indexOf("/");
+    if (slash > 0) {
+      const prefix = m.substring(0, slash);
+      if (!groups[prefix]) groups[prefix] = [];
+      groups[prefix].push(m);
+    } else {
+      ungrouped.push(m);
+    }
+  });
+
+  // Render grouped models with <optgroup>
+  const orderedPrefixes = ["openai", "anthropic", "google", "x-ai", "meta", "deepseek", "mistralai"];
+  const renderOpt = (m) => {
     const opt = document.createElement("option");
     opt.value = m;
+    const shortName = m.includes("/") ? m.split("/").slice(1).join("/") : m;
     const pricing = _modelPricingCache[m];
     if (pricing && (pricing.prompt > 0 || pricing.completion > 0)) {
-      opt.textContent = `${m}  ($${pricing.prompt}/${pricing.completion} per 1M tokens)`;
+      opt.textContent = `${shortName}  ($${pricing.prompt} / $${pricing.completion} per 1M)`;
     } else {
-      opt.textContent = m;
+      opt.textContent = shortName;
     }
-    sel.appendChild(opt);
+    return opt;
+  };
+
+  // Render in preferred order first, then remaining
+  const rendered = new Set();
+  orderedPrefixes.forEach((prefix) => {
+    if (groups[prefix]) {
+      const label = providerNames[prefix] || prefix;
+      const grp = document.createElement("optgroup");
+      grp.label = label;
+      groups[prefix].forEach((m) => grp.appendChild(renderOpt(m)));
+      sel.appendChild(grp);
+      rendered.add(prefix);
+    }
   });
+  Object.keys(groups).sort().forEach((prefix) => {
+    if (!rendered.has(prefix)) {
+      const label = providerNames[prefix] || prefix;
+      const grp = document.createElement("optgroup");
+      grp.label = label;
+      groups[prefix].forEach((m) => grp.appendChild(renderOpt(m)));
+      sel.appendChild(grp);
+    }
+  });
+  ungrouped.forEach((m) => sel.appendChild(renderOpt(m)));
+
   if (models.includes(prev)) {
     sel.value = prev;
   }

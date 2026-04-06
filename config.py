@@ -12,8 +12,8 @@ import os
 import sys
 
 # ─── LLM Settings ──────────────────────────────────────────────────
-LLM_PROVIDER = "openai"             # LLM provider: "openai", "google", "anthropic", "xai"
-LLM_MODEL = "gpt-4o"                # Model name (provider-specific)
+LLM_PROVIDER = "openrouter"          # LLM provider (unified via OpenRouter)
+LLM_MODEL = "openai/gpt-4o"         # Model name (provider/model format)
 LLM_TEMPERATURE = 0.3               # Low temperature for deterministic outputs
 LLM_MAX_RETRIES = 3                 # Retries on API failure
 LLM_MAX_WORKERS = 4                 # Max parallel threads for taxonomy expansion

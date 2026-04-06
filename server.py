@@ -1366,113 +1366,48 @@ _manual_api_keys: dict[str, str] = {}
 
 # Map provider -> environment variable name
 _PROVIDER_ENV_KEYS = {
-    "openai": "OPENAI_API_KEY",
-    "google": "GOOGLE_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "xai": "XAI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
 }
 
-# Models that Anthropic doesn't expose via a list endpoint
-_ANTHROPIC_MODELS = [
-    "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4",
-    "claude-opus-4-6", "claude-opus-4-5",
-    "claude-haiku-4-5",
-]
-
-
 @app.get("/api/models")
 async def list_models(provider: str = None):
-    """Fetch available models from a provider's API.
+    """Fetch available models from OpenRouter API with pricing.
 
-    Returns a list of model IDs suitable for chat/completion.
-    Requires a valid API key (env var or manual) for the provider.
+    Returns a list of model IDs grouped by provider, with per-model pricing.
+    Requires OPENROUTER_API_KEY.
     """
-    prov = (provider or getattr(config, "LLM_PROVIDER", "openai")).lower()
-    env_key = _PROVIDER_ENV_KEYS.get(prov, "")
-    api_key = os.environ.get(env_key) or _manual_api_keys.get(prov)
-
-    if not api_key and prov != "anthropic":
-        # Anthropic has no list endpoint anyway; others need a key
-        return {"success": False, "error": f"No API key configured for {prov}", "models": []}
+    api_key = os.environ.get("OPENROUTER_API_KEY") or _manual_api_keys.get("openrouter")
+    if not api_key:
+        return {"success": False, "error": "No OpenRouter API key configured", "models": []}
 
     try:
-        if prov == "openai":
-            from openai import OpenAI
-            client = OpenAI()
-            raw = client.models.list()
-            # Keep chat-relevant models: gpt-*, o3*, o4*
-            models = sorted(
-                m.id for m in raw
-                if any(m.id.startswith(p) for p in ("gpt-", "o3", "o4"))
-                and "audio" not in m.id
-                and "realtime" not in m.id
-                and "search" not in m.id
-            )
+        import httpx
+        headers = {"Authorization": f"Bearer {api_key}"}
+        resp = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15)
+        data = resp.json().get("data", [])
 
-        elif prov == "google":
-            from google import genai
-            gapi_key = api_key or os.environ.get("GEMINI_API_KEY")
-            if not gapi_key:
-                return {"success": False, "error": "No API key configured for google", "models": []}
-            client = genai.Client(api_key=gapi_key)
-            raw = client.models.list()
-            models = sorted(
-                m.name.removeprefix("models/") for m in raw
-                if "generateContent" in (m.supported_actions or [])
-                and "gemini" in m.name
-                and "image" not in m.name
-                and "tts" not in m.name
-                and "audio" not in m.name
-                and "live" not in m.name
-                and "thinking" not in m.name
-            )
-
-        elif prov == "anthropic":
-            # Anthropic has no list-models endpoint; return curated list
-            models = list(_ANTHROPIC_MODELS)
-
-        elif prov == "xai":
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
-            raw = client.models.list()
-            models = sorted(
-                m.id for m in raw
-                if "grok" in m.id
-            )
-
-        elif prov == "openrouter":
-            import httpx
-            headers = {"Authorization": f"Bearer {api_key}"}
-            resp = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15)
-            data = resp.json().get("data", [])
-            # Return models with pricing info
-            models_with_pricing = []
-            for m in data:
-                mid = m.get("id", "")
-                # Filter to text-capable models, skip image/audio-only
-                output_mods = []
-                arch = m.get("architecture", {})
-                if arch:
-                    output_mods = arch.get("output_modalities", [])
-                if output_mods and "text" not in output_mods:
-                    continue
-                pricing = m.get("pricing", {})
-                prompt_price = float(pricing.get("prompt", "0") or "0")
-                completion_price = float(pricing.get("completion", "0") or "0")
-                models_with_pricing.append({
-                    "id": mid,
-                    "name": m.get("name", mid),
-                    "context_length": m.get("context_length", 0),
-                    "prompt_price_per_1m": round(prompt_price * 1_000_000, 4),
-                    "completion_price_per_1m": round(completion_price * 1_000_000, 4),
-                })
-            models_with_pricing.sort(key=lambda x: x["id"])
-            return {"success": True, "models": [m["id"] for m in models_with_pricing],
-                    "models_with_pricing": models_with_pricing}
-
-        else:
-            return {"success": False, "error": f"Unknown provider: {prov}", "models": []}
+        models_with_pricing = []
+        for m in data:
+            mid = m.get("id", "")
+            # Filter to text-capable models
+            arch = m.get("architecture", {})
+            output_mods = arch.get("output_modalities", []) if arch else []
+            if output_mods and "text" not in output_mods:
+                continue
+            pricing = m.get("pricing", {})
+            prompt_price = float(pricing.get("prompt", "0") or "0")
+            completion_price = float(pricing.get("completion", "0") or "0")
+            models_with_pricing.append({
+                "id": mid,
+                "name": m.get("name", mid),
+                "context_length": m.get("context_length", 0),
+                "prompt_price_per_1m": round(prompt_price * 1_000_000, 4),
+                "completion_price_per_1m": round(completion_price * 1_000_000, 4),
+            })
+        models_with_pricing.sort(key=lambda x: x["id"])
+        return {"success": True,
+                "models": [m["id"] for m in models_with_pricing],
+                "models_with_pricing": models_with_pricing}
 
         return {"success": True, "models": models}
 
