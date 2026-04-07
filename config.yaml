@@ -18,7 +18,7 @@ demo: false                          # Use synthetic demo data (no LLM needed)
 #
 llm:
   provider: openrouter           # Unified LLM provider via OpenRouter
-  model: google/gemini-3.1-flash-lite-preview  # Model name (provider/model format)
+  model: openai/gpt-5.4-mini           # Model name (provider/model format)
   temperature: 0.3              # Low temperature for deterministic outputs
   max_retries: 3                # Retries on API failure
   max_workers: 16               # Max parallel threads for taxonomy expansion

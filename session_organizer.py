@@ -357,11 +357,19 @@ class GreedySessionFormer:
         max_p = self.stc.max_papers
 
         # Step 1.1: Initialize effective_papers on each node
+        # Only leaf nodes should have papers; internal nodes should be empty
+        # (papers live in children). If an internal node still has paper_ids,
+        # it means the taxonomy builder didn't fully clear it — skip those
+        # to prevent duplicates.
         node_papers: dict[str, list[str]] = {}  # node_id → effective papers
         bubbled: dict[str, list[str]] = {}       # node_id → bubbled-up papers
 
         def init(node):
-            node_papers[node.node_id] = list(node.paper_ids)
+            if node.is_leaf or not node.children:
+                node_papers[node.node_id] = list(node.paper_ids)
+            else:
+                # Internal node: papers should be in children, not here
+                node_papers[node.node_id] = []
             bubbled[node.node_id] = []
             for child in node.children:
                 init(child)
@@ -1730,6 +1738,56 @@ def final_validation(sessions: list[Session], papers: dict[str, Paper],
 
 
 # ════════════════════════════════════════════════════════════════════
+def _deduplicate_papers(sessions: list[Session],
+                        papers_map: dict[str, Paper],
+                        sim: SimilarityEngine) -> list[Session]:
+    """Ensure each paper appears in exactly one session.
+
+    If a paper is found in multiple sessions, it stays in the session
+    where it has the highest average similarity to the other papers.
+    """
+    # Find duplicates
+    paper_sessions: dict[str, list[int]] = {}  # paper_id -> [session indices]
+    for i, s in enumerate(sessions):
+        for pid in s.paper_ids:
+            paper_sessions.setdefault(pid, []).append(i)
+
+    duplicates = {pid: idxs for pid, idxs in paper_sessions.items() if len(idxs) > 1}
+    if not duplicates:
+        return sessions
+
+    logger.warning(f"Found {len(duplicates)} papers in multiple sessions — deduplicating")
+
+    for pid, session_idxs in duplicates.items():
+        # Score each session by average similarity of this paper to the others
+        best_idx = session_idxs[0]
+        best_score = -1.0
+        for si in session_idxs:
+            other_pids = [p for p in sessions[si].paper_ids if p != pid]
+            if not other_pids:
+                continue
+            try:
+                avg_sim = sum(sim.similarity(pid, other) for other in other_pids) / len(other_pids)
+            except Exception:
+                avg_sim = 0.0
+            if avg_sim > best_score:
+                best_score = avg_sim
+                best_idx = si
+
+        # Remove from all other sessions
+        for si in session_idxs:
+            if si != best_idx:
+                sessions[si].paper_ids = [p for p in sessions[si].paper_ids if p != pid]
+                logger.info(f"  Removed duplicate paper {pid} from session '{sessions[si].name}' "
+                            f"(kept in '{sessions[best_idx].name}')")
+
+    # Remove empty sessions
+    sessions = [s for s in sessions if s.paper_ids]
+
+    return sessions
+
+
+# ════════════════════════════════════════════════════════════════════
 # TOP-LEVEL API
 # ════════════════════════════════════════════════════════════════════
 
@@ -1758,6 +1816,9 @@ def _run_organization(papers: list[Paper], taxonomy_root: TaxonomyNode,
         former = GreedySessionFormer(papers_map, sim, taxonomy_root, stc)
 
     sessions, edits = former.form_sessions()
+
+    # Deduplicate: ensure each paper appears in exactly one session
+    sessions = _deduplicate_papers(sessions, papers_map, sim)
 
     # Stage 2: Session → Slot
     logger.info(f"Stage 2: Session → Slot ({stc.session_type})")
