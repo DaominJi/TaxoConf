@@ -1023,12 +1023,12 @@ async def poster_run(request: Request):
         )
 
         # Context-aware session naming (bottom-up cascade)
-        if poster_result.org_result:
+        if poster_result.organization:
             try:
                 naming_llm = LLMClient()
-                name_sessions(poster_result.org_result.sessions, taxonomy_root,
+                name_sessions(poster_result.organization.sessions, taxonomy_root,
                               papers_map, naming_llm)
-                org_session_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                org_session_names = {s.session_id: s.name for s in poster_result.organization.sessions}
                 for ps in poster_result.poster_sessions:
                     if ps.session_id in org_session_names:
                         ps.name = org_session_names[ps.session_id]
@@ -1203,12 +1203,12 @@ async def poster_run_stream(request: Request):
 
             # Step 4: Session naming (with heartbeat)
             def _do_poster_naming():
-                if poster_result.org_result:
+                if poster_result.organization:
                     try:
                         naming_llm = LLMClient()
                         from session_namer import name_sessions as _name
-                        _name(poster_result.org_result.sessions, taxonomy_root, papers_map, naming_llm)
-                        org_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                        _name(poster_result.organization.sessions, taxonomy_root, papers_map, naming_llm)
+                        org_names = {s.session_id: s.name for s in poster_result.organization.sessions}
                         for ps in poster_result.poster_sessions:
                             if ps.session_id in org_names:
                                 ps.name = org_names[ps.session_id]
