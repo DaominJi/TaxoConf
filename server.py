@@ -570,6 +570,57 @@ def _ensure_live_pricing():
         logger.warning(f"Failed to fetch live pricing: {e}")
 
 
+def _run_with_heartbeat(func, step, total, msg, interval=15):
+    """Run a blocking function in a thread, yielding SSE heartbeats.
+
+    Yields the initial progress event, then a heartbeat comment every
+    `interval` seconds while `func` executes. Returns the function result
+    after the final heartbeat.
+
+    Usage in a generator:
+        for event in _run_with_heartbeat(lambda: slow_thing(), 2, 7, "Building..."):
+            yield event
+        result = _heartbeat_result
+    """
+    import threading
+    import time
+
+    container = {"result": None, "error": None, "done": False}
+
+    def worker():
+        try:
+            container["result"] = func()
+        except Exception as e:
+            container["error"] = e
+        finally:
+            container["done"] = True
+
+    # Yield the step progress event
+    yield f"data: {json.dumps({'type':'progress','step':step,'total':total,'msg':msg})}\n\n"
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    elapsed = 0
+    while not container["done"]:
+        time.sleep(min(interval, 5))
+        elapsed += min(interval, 5)
+        if not container["done"]:
+            # SSE comment line (starts with :) keeps connection alive
+            yield f": heartbeat {elapsed}s\n\n"
+            # Also send a progress update with elapsed time
+            mins = elapsed // 60
+            secs = elapsed % 60
+            time_str = f"{mins}m {secs}s" if mins else f"{secs}s"
+            yield f"data: {json.dumps({'type':'progress','step':step,'total':total,'msg':f'{msg} ({time_str} elapsed)'})}\n\n"
+
+    if container["error"]:
+        raise container["error"]
+
+    # Store result for caller to retrieve
+    _run_with_heartbeat._last_result = container["result"]
+
+
 @app.post("/api/oral/run-stream")
 async def oral_run_stream(request: Request):
     """Run oral session organization with SSE progress streaming."""
@@ -603,25 +654,37 @@ async def oral_run_stream(request: Request):
             papers = get_papers(conf)
             papers_map = {p.id: p for p in papers}
 
-            # Step 2: Taxonomy construction (clear cache to force rebuild)
+            # Step 2: Taxonomy construction (with heartbeat)
             _taxonomy_cache.pop(conf, None)
-            yield f"data: {json.dumps({'type':'progress','step':2,'total':7,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
-            taxonomy_root = get_taxonomy(conf, papers)
+            for event in _run_with_heartbeat(
+                lambda: get_taxonomy(conf, papers),
+                2, 7, f"Constructing topic taxonomy for {len(papers)} papers via LLM..."
+            ):
+                yield event
+            taxonomy_root = _run_with_heartbeat._last_result
 
-            # Step 3: Session formation
-            yield f"data: {json.dumps({'type':'progress','step':3,'total':7,'msg':'Forming sessions from taxonomy leaves...'})}\n\n"
+            # Step 3: Session formation (with heartbeat)
             from session_organizer import run_oral_organization as _run_oral
-            result = _run_oral(papers, taxonomy_root)
+            for event in _run_with_heartbeat(
+                lambda: _run_oral(papers, taxonomy_root),
+                3, 7, "Forming sessions and scheduling into time slots..."
+            ):
+                yield event
+            result = _run_with_heartbeat._last_result
 
-            # Step 4: Session naming (bottom-up cascade)
-            yield f"data: {json.dumps({'type':'progress','step':4,'total':7,'msg':f'Generating names for {len(result.sessions)} sessions (bottom-up cascade)...'})}\n\n"
-            try:
-                naming_llm = LLMClient()
-                # name_sessions includes normalization
-                from session_namer import name_sessions as _name
-                _name(result.sessions, taxonomy_root, papers_map, naming_llm)
-            except Exception as e:
-                logger.warning(f"Session naming failed: {e}")
+            # Step 4: Session naming (with heartbeat)
+            def _do_naming():
+                try:
+                    naming_llm = LLMClient()
+                    from session_namer import name_sessions as _name
+                    _name(result.sessions, taxonomy_root, papers_map, naming_llm)
+                except Exception as e:
+                    logger.warning(f"Session naming failed: {e}")
+            for event in _run_with_heartbeat(
+                _do_naming,
+                4, 7, f"Generating names for {len(result.sessions)} sessions..."
+            ):
+                yield event
 
             # Step 5: Build response
             yield f"data: {json.dumps({'type':'progress','step':5,'total':7,'msg':'Building schedule grid...'})}\n\n"
@@ -655,8 +718,12 @@ async def oral_run_stream(request: Request):
                            "authors": p.authors, "presenters": p.authors} for p in papers]
 
             # Step 6: LLM session review
-            yield f"data: {json.dumps({'type':'progress','step':6,'total':7,'msg':'Reviewing sessions for misplaced papers...'})}\n\n"
-            hard_papers, review_status = _llm_review_sessions(sessions_out, mode="oral")
+            for event in _run_with_heartbeat(
+                lambda: _llm_review_sessions(sessions_out, mode="oral"),
+                6, 7, "Reviewing sessions for misplaced papers..."
+            ):
+                yield event
+            hard_papers, review_status = _run_with_heartbeat._last_result
 
             # Step 7: Finalize
             yield f"data: {json.dumps({'type':'progress','step':7,'total':7,'msg':'Finalizing results...'})}\n\n"
@@ -1108,41 +1175,50 @@ async def poster_run_stream(request: Request):
             papers = get_papers(conf)
             papers_map = {p.id: p for p in papers}
 
-            # Step 2 (clear cache to force rebuild)
+            # Step 2: Taxonomy (with heartbeat)
             _taxonomy_cache.pop(conf, None)
-            yield f"data: {json.dumps({'type':'progress','step':2,'total':8,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
-            taxonomy_root = get_taxonomy(conf, papers)
+            for event in _run_with_heartbeat(
+                lambda: get_taxonomy(conf, papers),
+                2, 8, f"Constructing topic taxonomy for {len(papers)} papers via LLM..."
+            ):
+                yield event
+            taxonomy_root = _run_with_heartbeat._last_result
 
             floor_plan = FloorPlanType(layout_type) if layout_type in ("line", "circle", "rectangle") else FloorPlanType.RECTANGLE
 
-            # Step 3
-            yield f"data: {json.dumps({'type':'progress','step':3,'total':8,'msg':'Forming poster sessions and scheduling into time slots...'})}\n\n"
-            poster_result = run_poster_pipeline(
-                papers=papers, taxonomy_root=taxonomy_root,
-                floor_plan=floor_plan, rect_cols=cols,
-                enable_proximity=optimize_within,
-                avoid_conflicts=prevent_same_presenter,
-                num_slots=config.POSTER_NUM_SLOTS,
-                num_parallel=config.POSTER_NUM_PARALLEL,
-            )
+            # Step 3: Session formation + layout (with heartbeat)
+            for event in _run_with_heartbeat(
+                lambda: run_poster_pipeline(
+                    papers=papers, taxonomy_root=taxonomy_root,
+                    floor_plan=floor_plan, rect_cols=cols,
+                    enable_proximity=optimize_within,
+                    avoid_conflicts=prevent_same_presenter,
+                    num_slots=config.POSTER_NUM_SLOTS,
+                    num_parallel=config.POSTER_NUM_PARALLEL,
+                ),
+                3, 8, "Forming poster sessions and optimizing board layout..."
+            ):
+                yield event
+            poster_result = _run_with_heartbeat._last_result
 
-            # Step 4
-            yield f"data: {json.dumps({'type':'progress','step':4,'total':8,'msg':'Optimizing board layout for topical proximity...'})}\n\n"
-            # (already done inside run_poster_pipeline, but status update is useful)
-
-            # Step 5
-            yield f"data: {json.dumps({'type':'progress','step':5,'total':8,'msg':f'Generating names for {len(poster_result.poster_sessions)} sessions...'})}\n\n"
-            if poster_result.org_result:
-                try:
-                    naming_llm = LLMClient()
-                    from session_namer import name_sessions as _name
-                    _name(poster_result.org_result.sessions, taxonomy_root, papers_map, naming_llm)
-                    org_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
-                    for ps in poster_result.poster_sessions:
-                        if ps.session_id in org_names:
-                            ps.name = org_names[ps.session_id]
-                except Exception as e:
-                    logger.warning(f"Poster naming failed: {e}")
+            # Step 4: Session naming (with heartbeat)
+            def _do_poster_naming():
+                if poster_result.org_result:
+                    try:
+                        naming_llm = LLMClient()
+                        from session_namer import name_sessions as _name
+                        _name(poster_result.org_result.sessions, taxonomy_root, papers_map, naming_llm)
+                        org_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                        for ps in poster_result.poster_sessions:
+                            if ps.session_id in org_names:
+                                ps.name = org_names[ps.session_id]
+                    except Exception as e:
+                        logger.warning(f"Poster naming failed: {e}")
+            for event in _run_with_heartbeat(
+                _do_poster_naming,
+                4, 8, f"Generating names for {len(poster_result.poster_sessions)} sessions..."
+            ):
+                yield event
 
             # Step 6
             yield f"data: {json.dumps({'type':'progress','step':6,'total':8,'msg':'Building poster grid layout...'})}\n\n"
@@ -1172,9 +1248,13 @@ async def poster_run_stream(request: Request):
             all_papers = [{"id": p.id, "title": p.title, "abstract": p.abstract,
                            "authors": p.authors, "presenters": p.authors} for p in papers]
 
-            # Step 7
-            yield f"data: {json.dumps({'type':'progress','step':7,'total':8,'msg':'Reviewing sessions for misplaced papers...'})}\n\n"
-            hard_papers, review_status = _llm_review_sessions(sessions_out, mode="poster")
+            # Step 7: Session review (with heartbeat)
+            for event in _run_with_heartbeat(
+                lambda: _llm_review_sessions(sessions_out, mode="poster"),
+                7, 8, "Reviewing sessions for misplaced papers..."
+            ):
+                yield event
+            hard_papers, review_status = _run_with_heartbeat._last_result
 
             # Step 8
             yield f"data: {json.dumps({'type':'progress','step':8,'total':8,'msg':'Finalizing results...'})}\n\n"
