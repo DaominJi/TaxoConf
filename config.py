@@ -13,7 +13,7 @@ import sys
 
 # ─── LLM Settings ──────────────────────────────────────────────────
 LLM_PROVIDER = "openrouter"          # LLM provider (unified via OpenRouter)
-LLM_MODEL = "google/gemini-3.1-flash-lite-preview"  # Model name (provider/model format)
+LLM_MODEL = "openai/gpt-5.4-mini"   # Model name (provider/model format)
 LLM_TEMPERATURE = 0.3               # Low temperature for deterministic outputs
 LLM_MAX_RETRIES = 3                 # Retries on API failure
 LLM_MAX_WORKERS = 16                 # Max parallel threads for taxonomy expansion
