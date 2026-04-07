@@ -198,7 +198,7 @@ export async function loadSettings() {
     const s = data.result || data;
     if (s.llm) {
       if (s.llm.api_keys_status) _apiKeysStatus = s.llm.api_keys_status;
-      document.getElementById("settingsProvider").value = s.llm.provider || "openai";
+      document.getElementById("settingsProvider").value = "openrouter";
       await updateModelDropdown(s.llm.model || "");
       const src = s.llm.api_key_source || "environment";
       document.querySelectorAll('input[name="apiKeySource"]').forEach((r) => (r.checked = r.value === src));

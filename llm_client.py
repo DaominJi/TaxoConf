@@ -33,11 +33,16 @@ class LLMClient:
 
     def __init__(self, provider: str = None, model: str = None,
                  temperature: float = None, json_mode: bool = True):
-        self.provider = (provider or getattr(config, "LLM_PROVIDER", "openai")).lower()
+        self.provider = (provider or getattr(config, "LLM_PROVIDER", "openrouter")).lower()
         self.model = model or config.LLM_MODEL
         self.temperature = temperature if temperature is not None else config.LLM_TEMPERATURE
         self.json_mode = json_mode
         self.tracker = get_global_tracker()
+
+        # Auto-detect: if model has "provider/model" format, force openrouter
+        if "/" in self.model and self.provider != "openrouter":
+            logger.info(f"Model '{self.model}' has provider prefix — switching to openrouter")
+            self.provider = "openrouter"
 
         self._init_client()
 
