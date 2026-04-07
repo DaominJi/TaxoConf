@@ -187,7 +187,8 @@ def get_taxonomy(conference: str, papers: list[Paper]) -> TaxonomyNode:
     """Get or build taxonomy. Uses demo taxonomy if no LLM key is set."""
     if conference not in _taxonomy_cache:
         has_api_key = bool(
-            os.environ.get("OPENAI_API_KEY")
+            os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
             or os.environ.get("GOOGLE_API_KEY")
             or os.environ.get("GEMINI_API_KEY")
             or os.environ.get("ANTHROPIC_API_KEY")
@@ -576,7 +577,8 @@ async def oral_run_stream(request: Request):
             papers = get_papers(conf)
             papers_map = {p.id: p for p in papers}
 
-            # Step 2: Taxonomy construction
+            # Step 2: Taxonomy construction (clear cache to force rebuild)
+            _taxonomy_cache.pop(conf, None)
             yield f"data: {json.dumps({'type':'progress','step':2,'total':7,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
             taxonomy_root = get_taxonomy(conf, papers)
 
@@ -1083,7 +1085,8 @@ async def poster_run_stream(request: Request):
             papers = get_papers(conf)
             papers_map = {p.id: p for p in papers}
 
-            # Step 2
+            # Step 2 (clear cache to force rebuild)
+            _taxonomy_cache.pop(conf, None)
             yield f"data: {json.dumps({'type':'progress','step':2,'total':8,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
             taxonomy_root = get_taxonomy(conf, papers)
 
@@ -1283,7 +1286,8 @@ def _llm_review_sessions(sessions_out: list[dict], mode: str = "oral"
     diagnostic info for the API response.
     """
     has_api_key = bool(
-        os.environ.get("OPENAI_API_KEY")
+        os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("GOOGLE_API_KEY")
         or os.environ.get("GEMINI_API_KEY")
         or os.environ.get("ANTHROPIC_API_KEY")

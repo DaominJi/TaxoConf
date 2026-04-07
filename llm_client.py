@@ -64,7 +64,7 @@ class LLMClient:
         except ImportError:
             raise ImportError("openai package required for OpenAI provider. "
                               "Install with: pip install openai")
-        self.client = OpenAI()
+        self.client = OpenAI(timeout=120.0)  # 2 minute timeout per call
 
     def _init_google(self):
         """Initialize Google Gemini client (uses GOOGLE_API_KEY env var)."""
@@ -98,7 +98,8 @@ class LLMClient:
         if not api_key:
             raise ValueError("XAI_API_KEY environment variable required")
         self.client = OpenAI(api_key=api_key,
-                             base_url="https://api.x.ai/v1")
+                             base_url="https://api.x.ai/v1",
+                             timeout=120.0)
 
     def _init_openrouter(self):
         """Initialize OpenRouter client (uses OPENROUTER_API_KEY env var).
@@ -115,7 +116,8 @@ class LLMClient:
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY environment variable required")
         self.client = OpenAI(api_key=api_key,
-                             base_url="https://openrouter.ai/api/v1")
+                             base_url="https://openrouter.ai/api/v1",
+                             timeout=120.0)
 
     # -- Unified chat interface --
 
