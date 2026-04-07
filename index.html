@@ -601,9 +601,19 @@
             <h3 style="margin:0 0 10px;font-size:0.9rem">LLM Provider &amp; Model</h3>
             <div class="grid-2">
               <div class="control-group">
-                <label class="control-label">Provider <span id="settingsKeyStatus" style="font-weight:normal;font-size:0.75rem;margin-left:4px"></span></label>
-                <div style="font-size:0.84rem;color:var(--ink);margin-top:4px">OpenRouter <span class="tiny" style="color:var(--ink-soft)">(unified access to OpenAI, Anthropic, Google, and 300+ models)</span></div>
-                <!-- Hidden select for backward compat -->
+                <label class="control-label" for="settingsProviderFilter">LLM Provider <span id="settingsKeyStatus" style="font-weight:normal;font-size:0.75rem;margin-left:4px"></span></label>
+                <select id="settingsProviderFilter">
+                  <option value="">All Providers</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="google">Google</option>
+                  <option value="x-ai">xAI</option>
+                  <option value="meta-llama">Meta (Llama)</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="mistralai">Mistral</option>
+                  <option value="qwen">Qwen</option>
+                </select>
+                <!-- Hidden provider value for backward compat -->
                 <select id="settingsProvider" style="display:none"><option value="openrouter" selected>openrouter</option></select>
               </div>
               <div class="control-group">

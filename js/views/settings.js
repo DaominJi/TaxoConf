@@ -33,6 +33,10 @@ export let _apiKeysStatus = {};
 /* Cached pricing data from OpenRouter (model_id -> {prompt, completion}) */
 let _modelPricingCache = {};
 
+/* Full model list from last API fetch (for re-filtering without re-fetching) */
+let _allFetchedModels = [];
+let _allFetchedPricing = [];
+
 /* ═══════════════════ Internal helpers ═══════════════════ */
 
 function _populateModelSelect(models, keepValue, pricingList) {
@@ -132,24 +136,36 @@ function _updatePricingDisplay() {
 /* ═══════════════════ Public functions ═══════════════════ */
 
 export async function updateModelDropdown(keepValue) {
-  const prov = document.getElementById("settingsProvider").value;
   updateKeyStatus();
   updateKeyPlaceholder();
 
-  /* Try fetching live models from the provider API */
-  try {
-    const res = await fetch(`${API_BASE}/models?provider=${prov}`);
-    const data = await res.json();
-    if (data.success && data.models && data.models.length > 0) {
-      _populateModelSelect(data.models, keepValue, data.models_with_pricing);
-      return;
-    }
-  } catch (_) {
-    /* fall through to hardcoded list */
+  /* Fetch models from OpenRouter API if not cached */
+  if (_allFetchedModels.length === 0) {
+    try {
+      const res = await fetch(`${API_BASE}/models?provider=openrouter`);
+      const data = await res.json();
+      if (data.success && data.models && data.models.length > 0) {
+        _allFetchedModels = data.models;
+        _allFetchedPricing = data.models_with_pricing || [];
+      }
+    } catch (_) { /* fall through to hardcoded list */ }
   }
 
-  /* Fallback: use hardcoded list */
-  _populateModelSelect(PROVIDER_MODELS[prov] || [], keepValue);
+  const models = _allFetchedModels.length > 0 ? _allFetchedModels : (PROVIDER_MODELS.openrouter || []);
+  const pricing = _allFetchedPricing;
+
+  /* Apply provider filter */
+  const filter = document.getElementById("settingsProviderFilter")?.value || "";
+  const filtered = filter ? models.filter(m => m.startsWith(filter + "/")) : models;
+  const filteredPricing = filter ? pricing.filter(m => m.id.startsWith(filter + "/")) : pricing;
+
+  _populateModelSelect(filtered, keepValue, filteredPricing);
+}
+
+/** Re-filter models without re-fetching (called when provider filter changes). */
+export function filterModels() {
+  const current = document.getElementById("settingsModel")?.value || "";
+  updateModelDropdown(current);
 }
 
 export function updateKeyStatus() {
@@ -295,7 +311,7 @@ export async function testLLMConnection() {
 /* ═══════════════════ Event setup ═══════════════════ */
 
 export function setupSettingsEvents() {
-  document.getElementById("settingsProvider").addEventListener("change", () => updateModelDropdown());
+  document.getElementById("settingsProviderFilter").addEventListener("change", filterModels);
   document.getElementById("settingsModel").addEventListener("change", _updatePricingDisplay);
   document.querySelectorAll('input[name="apiKeySource"]').forEach((r) => {
     r.addEventListener("change", toggleManualKeyRow);
