@@ -874,23 +874,27 @@ export function renderOralResults() {
     }
   });
 
+  const trackName = result.trackName || "";
   schedulePanel.innerHTML = `${loadingBanner}
     <div class="schedule-shell">
+      <div class="grid-track-name-row">
+        <label class="grid-field" style="flex-direction:row;align-items:center;gap:8px">
+          <span style="white-space:nowrap;font-weight:600">Track:</span>
+          <input class="grid-inline-input" id="oralTrackNameInput" type="text" value="${escapeHtml(trackName)}" placeholder="e.g. Full Paper Track, Industrial Track" style="max-width:400px">
+        </label>
+      </div>
       <table>
         <thead>
           <tr>
             <th class="grid-header-slot">Schedule</th>
-            ${(() => {
-              const names = ensureTrackNames(result, K);
-              return Array.from({ length: K }, (_, i) => {
-                const track = i + 1;
-                const loc = trackLocations[track] || "";
-                return `<th class="grid-header-track">
-                  <input class="grid-inline-input grid-track-name" data-track-name="${track}" type="text" value="${escapeHtml(names[i])}" placeholder="e.g. Full Paper Track">
-                  <input class="grid-inline-input grid-track-room" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
-                </th>`;
-              }).join("");
-            })()}
+            ${Array.from({ length: K }, (_, i) => {
+              const track = i + 1;
+              const loc = trackLocations[track] || "";
+              return `<th class="grid-header-track">
+                <div class="grid-track-label">Location ${track}</div>
+                <input class="grid-inline-input grid-track-room" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
+              </th>`;
+            }).join("")}
           </tr>
         </thead>
         <tbody>
@@ -1010,8 +1014,14 @@ export function renderOralResults() {
       const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
       const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
       setSlotTimeFields(slot, { startTime: startEl?.value, endTime: endEl?.value, sessionDate: el.value });
-    } else if (el.dataset.trackName) {
-      setTrackName(Number(el.dataset.trackName), el.value);
+    } else if (el.id === "oralTrackNameInput") {
+      // Single track name for all sessions
+      const result = state.oral.result;
+      if (result) {
+        result.trackName = el.value.trim();
+        result.sessions.forEach((s) => { ensureSessionMetadata(s); s.trackLabel = el.value.trim(); });
+        autoSaveOralProgress();
+      }
     } else if (el.dataset.trackLocation) {
       setTrackLocation(Number(el.dataset.trackLocation), el.value);
     }
@@ -1132,8 +1142,7 @@ export function buildOralExportHtml() {
 export function buildOralExportCsv() {
   const result = state.oral.result;
   if (!result) return "";
-  const K = state.oral.parallelSessions;
-  const names = ensureTrackNames(result, K);
+  const globalTrackName = result.trackName || "";
   const rows = [[
     "*Date",
     "*Time Start",
@@ -1148,7 +1157,7 @@ export function buildOralExportCsv() {
   ]];
   result.sessions.forEach((session) => {
     ensureSessionMetadata(session);
-    const trackName = (session.track && names[session.track - 1]) || session.trackLabel || "";
+    const trackName = globalTrackName || session.trackLabel || "";
     rows.push([
       session.sessionDate || "",
       session.startTime || "",
@@ -1218,7 +1227,7 @@ export function setupOralEvents() {
               track: s.track || 0,
               location: s.location || "",
             })),
-            trackNames: result.trackNames || [],
+            trackName: result.trackName || "",
           }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

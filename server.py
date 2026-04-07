@@ -719,7 +719,7 @@ async def export_excel(mode: str, request: Request):
 
         body = await request.json()
         sessions = body.get("sessions", [])
-        track_names = body.get("trackNames", [])
+        global_track_name = body.get("trackName", "")
 
         template_path = PROJECT_ROOT / "template" / "excel_template.xlsx"
         if not template_path.is_file():
@@ -733,12 +733,7 @@ async def export_excel(mode: str, request: Request):
             s_date = session.get("sessionDate", "")
             s_start = session.get("startTime", "")
             s_end = session.get("endTime", "")
-            s_track_idx = session.get("track", 0)
-            s_track_name = ""
-            if track_names and 0 < s_track_idx <= len(track_names):
-                s_track_name = track_names[s_track_idx - 1]
-            elif session.get("trackLabel"):
-                s_track_name = session["trackLabel"]
+            s_track_name = global_track_name or session.get("trackLabel", "")
             s_title = session.get("sessionName", "")
             s_room = session.get("location", "")
             s_chair = session.get("sessionChair", "")
