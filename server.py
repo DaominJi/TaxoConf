@@ -1834,7 +1834,11 @@ async def test_llm_connection(request: Request):
 
     try:
         llm = LLMClient(json_mode=False)
-        response = llm.chat("You are a helpful assistant.", "Say 'hello' in one word.", call_label="test-connection")
+        response = llm.chat(
+            "You are an AI assistant helping to organize an academic conference. Respond briefly.",
+            "Please confirm this connection is working by responding with a short greeting and the name of the model you are.",
+            call_label="test-connection"
+        )
         return {"success": True, "message": f"Model responded: {response[:80]}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
