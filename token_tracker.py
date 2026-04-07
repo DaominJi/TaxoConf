@@ -86,7 +86,34 @@ PRICING: dict[str, dict[str, tuple[float, float]]] = {
 
 
 def _lookup_price(provider: str, model: str) -> tuple[float, float]:
-    """Look up (input_per_1M, output_per_1M) for a provider + model."""
+    """Look up (input_per_1M, output_per_1M) for a provider + model.
+
+    For OpenRouter models (format "provider/model"), strips the prefix
+    and looks up in the original provider's pricing table.
+    """
+    # OpenRouter models: "openai/gpt-4o" → lookup in PRICING["openai"] for "gpt-4o"
+    if provider == "openrouter" and "/" in model:
+        orig_provider, orig_model = model.split("/", 1)
+        # Map OpenRouter provider prefixes to our pricing table keys
+        provider_map = {
+            "openai": "openai", "anthropic": "anthropic",
+            "google": "google", "x-ai": "xai",
+            "meta-llama": "openai",  # use openai default pricing as fallback
+            "deepseek": "openai",
+            "mistralai": "openai",
+        }
+        mapped_provider = provider_map.get(orig_provider, orig_provider)
+        result = _lookup_in_provider(mapped_provider, orig_model)
+        if result != (0.0, 0.0):
+            return result
+        # Try with full model name as fallback
+        return _lookup_in_provider(mapped_provider, model)
+
+    return _lookup_in_provider(provider, model)
+
+
+def _lookup_in_provider(provider: str, model: str) -> tuple[float, float]:
+    """Look up price in a specific provider's pricing table."""
     provider_prices = PRICING.get(provider, {})
     if not provider_prices:
         return (0.0, 0.0)
