@@ -186,14 +186,8 @@ def get_papers(conference: str, mode: str = "oral") -> list[Paper]:
 def get_taxonomy(conference: str, papers: list[Paper]) -> TaxonomyNode:
     """Get or build taxonomy. Uses demo taxonomy if no LLM key is set."""
     if conference not in _taxonomy_cache:
-        has_api_key = bool(
-            os.environ.get("OPENROUTER_API_KEY")
-            or os.environ.get("OPENAI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("XAI_API_KEY")
-        )
+        has_api_key = bool(os.environ.get("OPENROUTER_API_KEY")
+                          or _manual_api_keys.get("openrouter"))
 
         if has_api_key:
             logger.info(f"Building LLM taxonomy for {conference}...")
@@ -1314,14 +1308,8 @@ def _llm_review_sessions(sessions_out: list[dict], mode: str = "oral"
     Returns (hard_papers, review_status) where review_status contains
     diagnostic info for the API response.
     """
-    has_api_key = bool(
-        os.environ.get("OPENROUTER_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or os.environ.get("XAI_API_KEY")
-    )
+    has_api_key = bool(os.environ.get("OPENROUTER_API_KEY")
+                       or _manual_api_keys.get("openrouter"))
     if not has_api_key:
         logger.info(f"No LLM API key found; skipping {mode} session review")
         return [], {"status": "skipped", "reason": "No LLM API key configured"}
@@ -1730,7 +1718,7 @@ async def list_models(provider: str = None):
 @app.get("/api/settings")
 async def get_settings():
     """Return current settings from the config module."""
-    provider = getattr(config, "LLM_PROVIDER", "openai")
+    provider = getattr(config, "LLM_PROVIDER", "openrouter")
     env_key = _PROVIDER_ENV_KEYS.get(provider, "")
     has_key = bool(os.environ.get(env_key) or _manual_api_keys.get(provider))
 
@@ -1778,20 +1766,15 @@ async def update_settings(request: Request):
     body = await request.json()
 
     llm = body.get("llm", {})
-    if llm.get("provider"):
-        config.LLM_PROVIDER = llm["provider"]
+    # Force provider to openrouter (only supported provider)
+    config.LLM_PROVIDER = "openrouter"
     if llm.get("model"):
         config.LLM_MODEL = llm["model"]
-    if llm.get("temperature") is not None:
-        config.LLM_TEMPERATURE = float(llm["temperature"])
     if llm.get("api_key"):
-        # Store manual key in session memory AND set as env var so LLMClient picks it up
-        provider = llm.get("provider", config.LLM_PROVIDER)
-        env_key = _PROVIDER_ENV_KEYS.get(provider, "")
-        if env_key:
-            _manual_api_keys[provider] = llm["api_key"]
-            os.environ[env_key] = llm["api_key"]
-            logger.info(f"Manual API key set for provider '{provider}' (session-only)")
+        # Store manual key for OpenRouter
+        _manual_api_keys["openrouter"] = llm["api_key"]
+        os.environ["OPENROUTER_API_KEY"] = llm["api_key"]
+        logger.info("Manual OpenRouter API key set (session-only)")
 
     oral = body.get("oral", {})
     if oral.get("method"):
@@ -1835,21 +1818,18 @@ async def update_settings(request: Request):
 async def test_llm_connection(request: Request):
     """Test LLM connectivity with current or provided settings."""
     body = await request.json()
-    provider = body.get("provider", config.LLM_PROVIDER)
     model = body.get("model", config.LLM_MODEL)
 
     # If a manual key is provided, temporarily set it
     temp_key = body.get("api_key")
-    env_key = _PROVIDER_ENV_KEYS.get(provider, "")
-    old_env = None
-    if temp_key and env_key:
-        old_env = os.environ.get(env_key)
-        os.environ[env_key] = temp_key
+    old_env = os.environ.get("OPENROUTER_API_KEY")
+    if temp_key:
+        os.environ["OPENROUTER_API_KEY"] = temp_key
 
     # Temporarily override config for this test
     old_provider = config.LLM_PROVIDER
     old_model = config.LLM_MODEL
-    config.LLM_PROVIDER = provider
+    config.LLM_PROVIDER = "openrouter"
     config.LLM_MODEL = model
 
     try:
@@ -1861,11 +1841,11 @@ async def test_llm_connection(request: Request):
     finally:
         config.LLM_PROVIDER = old_provider
         config.LLM_MODEL = old_model
-        if temp_key and env_key:
+        if temp_key:
             if old_env is not None:
-                os.environ[env_key] = old_env
+                os.environ["OPENROUTER_API_KEY"] = old_env
             else:
-                os.environ.pop(env_key, None)
+                os.environ.pop("OPENROUTER_API_KEY", None)
 
 
 # ════════════════════════════════════════════════════════════════════

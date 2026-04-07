@@ -217,7 +217,6 @@ export async function saveSettings() {
   const apiKeySource = document.querySelector('input[name="apiKeySource"]:checked').value;
   const body = {
     llm: {
-      provider: document.getElementById("settingsProvider").value,
       model: document.getElementById("settingsModel").value,
       api_key_source: apiKeySource,
     },
@@ -260,9 +259,7 @@ export async function testLLMConnection() {
   resultEl.style.color = "var(--ink-soft)";
 
   const apiKeySource = document.querySelector('input[name="apiKeySource"]:checked').value;
-  const prov = document.getElementById("settingsProvider").value;
   const body = {
-    provider: prov,
     model: document.getElementById("settingsModel").value,
   };
   if (apiKeySource === "manual") {
@@ -274,11 +271,8 @@ export async function testLLMConnection() {
       return;
     }
     body.api_key = key;
-  } else if (!_apiKeysStatus[prov]) {
-    resultEl.textContent =
-      "No API key found. Set "
-      + ({ openai: "OPENAI_API_KEY", google: "GOOGLE_API_KEY", anthropic: "ANTHROPIC_API_KEY", xai: "XAI_API_KEY" }[prov] || "the env var")
-      + " or enter one manually.";
+  } else if (!_apiKeysStatus["openrouter"]) {
+    resultEl.textContent = "No API key found. Set OPENROUTER_API_KEY or enter one manually.";
     resultEl.style.color = "var(--danger, #c44)";
     btn.disabled = false;
     return;
