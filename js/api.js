@@ -67,3 +67,64 @@ export function requireApiResult(resp, label) {
   }
   return resp.result;
 }
+
+/**
+ * POST with SSE streaming. Calls onProgress for each progress event,
+ * returns the final result data.
+ *
+ * @param {string} path - API path (e.g., "/oral/run-stream")
+ * @param {object} payload - POST body
+ * @param {function} onProgress - Called with {step, total, msg} for each progress event
+ * @returns {Promise<object>} The final response data
+ */
+export async function apiPostStream(path, payload, onProgress) {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Request failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResult = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete SSE lines
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || ""; // Keep incomplete last line
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6));
+        if (event.type === "progress" && onProgress) {
+          onProgress(event);
+        } else if (event.type === "result") {
+          finalResult = event.data;
+        } else if (event.type === "error") {
+          throw new Error(event.error || "Backend error");
+        }
+      } catch (e) {
+        if (e.message && !e.message.startsWith("Unexpected")) throw e;
+        // Ignore JSON parse errors on partial data
+      }
+    }
+  }
+
+  if (!finalResult) {
+    throw new Error("Stream ended without a result.");
+  }
+  return finalResult;
+}

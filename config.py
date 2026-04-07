@@ -12,19 +12,22 @@ import os
 import sys
 
 # ─── LLM Settings ──────────────────────────────────────────────────
-LLM_PROVIDER = "openai"             # LLM provider: "openai", "google", "anthropic", "xai"
-LLM_MODEL = "gpt-4o"                # Model name (provider-specific)
+LLM_PROVIDER = "openrouter"          # LLM provider (unified via OpenRouter)
+LLM_MODEL = "google/gemini-3.1-flash-lite-preview"  # Model name (provider/model format)
 LLM_TEMPERATURE = 0.3               # Low temperature for deterministic outputs
 LLM_MAX_RETRIES = 3                 # Retries on API failure
-LLM_MAX_WORKERS = 4                 # Max parallel threads for taxonomy expansion
+LLM_MAX_WORKERS = 16                 # Max parallel threads for taxonomy expansion
 
 # ─── Taxonomy Construction ──────────────────────────────────────────
 MAX_DEPTH = 3                        # Maximum depth of the taxonomy tree
 MIN_PAPERS_TO_SPLIT = 3              # Don't subdivide nodes with fewer papers
-MAX_CHILDREN = 8                     # Max children per taxonomy node
+MAX_CHILDREN = 16                     # Max children per taxonomy node
 TOKEN_THRESHOLD = 60000              # Estimated token budget; if total input
                                      # exceeds this, use titles only.
 TOKEN_EST_CHARS_PER_TOKEN = 4        # Rough char-to-token ratio
+USE_ABSTRACTS = True                 # Include abstracts in taxonomy construction
+                                     # (falls back to titles-only if exceeding
+                                     # TOKEN_THRESHOLD even when enabled)
 
 # ─── Oral Session Formation ─────────────────────────────────────────
 SESSION_MIN = 3                      # Minimum papers per oral session

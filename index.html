@@ -407,6 +407,10 @@
                   <input id="oralConflictInput" type="checkbox" checked>
                   Avoid presenter conflicts across parallel sessions
                 </label>
+                <label class="checkbox-line" style="margin-top:4px">
+                  <input id="oralUseAbstractsInput" type="checkbox" checked>
+                  Use abstracts for taxonomy construction
+                </label>
               </div>
 
               <div class="control-card">
@@ -515,6 +519,10 @@
                   <input id="posterPresenterConflictInput" type="checkbox">
                   Prevent same presenter in same session
                 </label>
+                <label class="checkbox-line" style="margin-top:4px">
+                  <input id="posterUseAbstractsInput" type="checkbox" checked>
+                  Use abstracts for taxonomy construction
+                </label>
                 <div id="posterCapacityNotice" class="capacity-note" style="margin-top:8px">Checking capacity...</div>
               </div>
 
@@ -593,17 +601,25 @@
             <h3 style="margin:0 0 10px;font-size:0.9rem">LLM Provider &amp; Model</h3>
             <div class="grid-2">
               <div class="control-group">
-                <label class="control-label" for="settingsProvider">Provider <span id="settingsKeyStatus" style="font-weight:normal;font-size:0.75rem;margin-left:4px"></span></label>
-                <select id="settingsProvider">
+                <label class="control-label" for="settingsProviderFilter">LLM Provider <span id="settingsKeyStatus" style="font-weight:normal;font-size:0.75rem;margin-left:4px"></span></label>
+                <select id="settingsProviderFilter">
+                  <option value="">All Providers</option>
                   <option value="openai">OpenAI</option>
-                  <option value="google">Google Gemini</option>
-                  <option value="anthropic">Anthropic Claude</option>
-                  <option value="xai">xAI Grok</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="google">Google</option>
+                  <option value="x-ai">xAI</option>
+                  <option value="meta-llama">Meta (Llama)</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="mistralai">Mistral</option>
+                  <option value="qwen">Qwen</option>
                 </select>
+                <!-- Hidden provider value for backward compat -->
+                <select id="settingsProvider" style="display:none"><option value="openrouter" selected>openrouter</option></select>
               </div>
               <div class="control-group">
                 <label class="control-label" for="settingsModel">Model</label>
                 <select id="settingsModel"></select>
+                <div id="settingsModelPricing" class="tiny" style="margin-top:4px;color:var(--ink-soft)"></div>
               </div>
             </div>
             <div class="control-group" style="margin-top:8px">
@@ -625,11 +641,8 @@
             </div>
             <div style="margin-top:10px;padding:10px 12px;background:#f6fbfa;border:1px solid #e5efec;border-radius:10px">
               <div class="tiny" style="margin:0">
-                <strong>Environment variables by provider:</strong><br>
-                Google Gemini: <code>GOOGLE_API_KEY</code>&nbsp;&nbsp;|&nbsp;&nbsp;
-                OpenAI: <code>OPENAI_API_KEY</code><br>
-                Anthropic: <code>ANTHROPIC_API_KEY</code>&nbsp;&nbsp;|&nbsp;&nbsp;
-                xAI: <code>XAI_API_KEY</code>
+                <strong>API Key:</strong> Set <code>OPENROUTER_API_KEY</code> as an environment variable, or enter it manually below.<br>
+                Get your key at <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent)">openrouter.ai/keys</a>
               </div>
             </div>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center">

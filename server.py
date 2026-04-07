@@ -40,10 +40,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import config
 from models import Paper, TaxonomyNode, Session, PosterSession, FloorPlanType
-from taxonomy_builder import (TaxonomyBuilder, LLMClient, collect_leaves,
+from llm_client import LLMClient
+from taxonomy_builder import (TaxonomyBuilder, collect_leaves,
                               print_taxonomy)
 from session_organizer import run_oral_organization, OrganizationResult
 from poster_organizer import run_poster_pipeline, PosterOrganizationResult
+from session_namer import name_sessions
 from similarity import SimilarityEngine
 from token_tracker import get_global_tracker, reset_global_tracker
 from session_reviewer import review_sessions
@@ -184,18 +186,14 @@ def get_papers(conference: str, mode: str = "oral") -> list[Paper]:
 def get_taxonomy(conference: str, papers: list[Paper]) -> TaxonomyNode:
     """Get or build taxonomy. Uses demo taxonomy if no LLM key is set."""
     if conference not in _taxonomy_cache:
-        has_api_key = bool(
-            os.environ.get("OPENAI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("XAI_API_KEY")
-        )
+        has_api_key = bool(os.environ.get("OPENROUTER_API_KEY")
+                          or _manual_api_keys.get("openrouter"))
 
         if has_api_key:
             logger.info(f"Building LLM taxonomy for {conference}...")
             llm = LLMClient()
-            builder = TaxonomyBuilder(papers, llm=llm)
+            builder = TaxonomyBuilder(papers, llm=llm,
+                                      use_abstracts=getattr(config, "USE_ABSTRACTS", True))
             root = builder.build()
         else:
             logger.info(f"No LLM API key found; building automatic taxonomy for {conference}...")
@@ -426,6 +424,7 @@ async def oral_run(request: Request):
         time_slots = int(body.get("time_slots", 19))
         max_per_session = int(body.get("max_per_session", 4))
         min_per_session = int(body.get("min_per_session", 3))
+        use_abstracts = body.get("use_abstracts", True)
 
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
@@ -435,6 +434,7 @@ async def oral_run(request: Request):
         config.SESSION_MAX = max_per_session
         config.NUM_SLOTS = time_slots
         config.NUM_PARALLEL_TRACKS = parallel_sessions
+        config.USE_ABSTRACTS = bool(use_abstracts)
 
         papers = get_papers(conf)
         papers_map = {p.id: p for p in papers}
@@ -445,6 +445,13 @@ async def oral_run(request: Request):
                      f"session size {min_per_session}-{max_per_session}")
 
         result = run_oral_organization(papers, taxonomy_root)
+
+        # Context-aware session naming (bottom-up cascade)
+        try:
+            naming_llm = LLMClient()
+            name_sessions(result.sessions, taxonomy_root, papers_map, naming_llm)
+        except Exception as e:
+            logger.warning(f"Session naming failed, keeping original names: {e}")
 
         # Build response in the format the frontend expects.
         # The frontend renders a 2-D grid (slot × track) and looks up sessions
@@ -534,6 +541,165 @@ async def oral_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+def _ensure_live_pricing():
+    """Fetch live pricing from OpenRouter if not already cached."""
+    from token_tracker import _live_pricing, set_live_pricing
+    if _live_pricing:
+        return  # Already loaded
+    api_key = os.environ.get("OPENROUTER_API_KEY") or _manual_api_keys.get("openrouter")
+    if not api_key:
+        return
+    try:
+        import httpx
+        headers = {"Authorization": f"Bearer {api_key}"}
+        resp = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15)
+        data = resp.json().get("data", [])
+        pricing_list = []
+        for m in data:
+            pricing = m.get("pricing", {})
+            prompt_price = float(pricing.get("prompt", "0") or "0")
+            completion_price = float(pricing.get("completion", "0") or "0")
+            if prompt_price > 0 or completion_price > 0:
+                pricing_list.append({
+                    "id": m.get("id", ""),
+                    "prompt_price_per_1m": round(prompt_price * 1_000_000, 4),
+                    "completion_price_per_1m": round(completion_price * 1_000_000, 4),
+                })
+        set_live_pricing(pricing_list)
+    except Exception as e:
+        logger.warning(f"Failed to fetch live pricing: {e}")
+
+
+@app.post("/api/oral/run-stream")
+async def oral_run_stream(request: Request):
+    """Run oral session organization with SSE progress streaming."""
+    from starlette.responses import StreamingResponse
+
+    body = await request.json()
+
+    def generate():
+        try:
+            conference = body.get("conference", "SIGIR25")
+            parallel_sessions = int(body.get("parallel_sessions", 7))
+            time_slots = int(body.get("time_slots", 19))
+            max_per_session = int(body.get("max_per_session", 4))
+            min_per_session = int(body.get("min_per_session", 3))
+            use_abstracts = body.get("use_abstracts", True)
+
+            conferences = discover_conferences()
+            conf = _resolve_conference(conference, conferences)
+
+            config.SESSION_MIN = min_per_session
+            config.SESSION_MAX = max_per_session
+            config.NUM_SLOTS = time_slots
+            config.NUM_PARALLEL_TRACKS = parallel_sessions
+            config.USE_ABSTRACTS = bool(use_abstracts)
+
+            # Ensure live pricing is loaded for accurate cost tracking
+            _ensure_live_pricing()
+
+            # Step 1: Load papers + build similarity
+            yield f"data: {json.dumps({'type':'progress','step':1,'total':7,'msg':'Loading papers and building similarity matrix...'})}\n\n"
+            papers = get_papers(conf)
+            papers_map = {p.id: p for p in papers}
+
+            # Step 2: Taxonomy construction (clear cache to force rebuild)
+            _taxonomy_cache.pop(conf, None)
+            yield f"data: {json.dumps({'type':'progress','step':2,'total':7,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
+            taxonomy_root = get_taxonomy(conf, papers)
+
+            # Step 3: Session formation
+            yield f"data: {json.dumps({'type':'progress','step':3,'total':7,'msg':'Forming sessions from taxonomy leaves...'})}\n\n"
+            from session_organizer import run_oral_organization as _run_oral
+            result = _run_oral(papers, taxonomy_root)
+
+            # Step 4: Session naming (bottom-up cascade)
+            yield f"data: {json.dumps({'type':'progress','step':4,'total':7,'msg':f'Generating names for {len(result.sessions)} sessions (bottom-up cascade)...'})}\n\n"
+            try:
+                naming_llm = LLMClient()
+                # name_sessions includes normalization
+                from session_namer import name_sessions as _name
+                _name(result.sessions, taxonomy_root, papers_map, naming_llm)
+            except Exception as e:
+                logger.warning(f"Session naming failed: {e}")
+
+            # Step 5: Build response
+            yield f"data: {json.dumps({'type':'progress','step':5,'total':7,'msg':'Building schedule grid...'})}\n\n"
+            sessions_out = []
+            assignment_map = {}
+            for s in result.sessions:
+                slot_1 = (s.time_slot or 0) + 1
+                track_1 = (s.track or 0) + 1
+                frontend_id = f"slot_{slot_1}_track_{track_1}"
+                session_data = {
+                    "id": frontend_id,
+                    "sessionName": s.name,
+                    "description": s.description,
+                    "slot": slot_1, "track": track_1,
+                    "paperCount": len(s.paper_ids),
+                    "targetSize": max_per_session,
+                    "papers": [],
+                }
+                for pid in s.paper_ids:
+                    p = papers_map.get(pid)
+                    if p:
+                        session_data["papers"].append({
+                            "id": p.id, "title": p.title,
+                            "abstract": p.abstract, "authors": p.authors,
+                            "presenters": p.authors,
+                        })
+                        assignment_map[p.id] = frontend_id
+                sessions_out.append(session_data)
+
+            all_papers = [{"id": p.id, "title": p.title, "abstract": p.abstract,
+                           "authors": p.authors, "presenters": p.authors} for p in papers]
+
+            # Step 6: LLM session review
+            yield f"data: {json.dumps({'type':'progress','step':6,'total':7,'msg':'Reviewing sessions for misplaced papers...'})}\n\n"
+            hard_papers, review_status = _llm_review_sessions(sessions_out, mode="oral")
+
+            # Step 7: Finalize
+            yield f"data: {json.dumps({'type':'progress','step':7,'total':7,'msg':'Finalizing results...'})}\n\n"
+
+            # Save token stats
+            try:
+                tracker_data = get_global_tracker().to_dict()
+                save_run_token_stats(conf, "oral", {
+                    "calls": tracker_data.get("total_calls", 0),
+                    "prompt_tokens": tracker_data.get("total_prompt_tokens", 0),
+                    "completion_tokens": tracker_data.get("total_completion_tokens", 0),
+                    "total_tokens": tracker_data.get("total_tokens", 0),
+                    "cost_usd": tracker_data.get("total_cost_usd", 0.0),
+                    "provider": config.LLM_PROVIDER,
+                    "model": config.LLM_MODEL,
+                })
+            except Exception:
+                pass
+
+            response = {
+                "result": {
+                    "sessions": sessions_out,
+                    "papers": all_papers,
+                    "assignment": assignment_map,
+                    "hardPapers": hard_papers,
+                    "reviewStatus": review_status,
+                    "stats": result.stats,
+                    "parallelSessions": parallel_sessions,
+                    "timeSlots": time_slots,
+                    "maxPerSession": max_per_session,
+                    "minPerSession": min_per_session,
+                    "tokenUsage": get_global_tracker().to_dict(),
+                }
+            }
+            yield f"data: {json.dumps({'type':'result','data':response})}\n\n"
+
+        except Exception as e:
+            logger.error(f"oral/run-stream error: {e}\n{traceback.format_exc()}")
+            yield f"data: {json.dumps({'type':'error','error':str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 # ── Excel export ─────────────────────────────────────────────────────
 
 @app.post("/api/{mode}/export-excel")
@@ -547,7 +713,7 @@ async def export_excel(mode: str, request: Request):
 
         body = await request.json()
         sessions = body.get("sessions", [])
-        track_names = body.get("trackNames", [])
+        global_track_name = body.get("trackName", "")
 
         template_path = PROJECT_ROOT / "template" / "excel_template.xlsx"
         if not template_path.is_file():
@@ -561,12 +727,7 @@ async def export_excel(mode: str, request: Request):
             s_date = session.get("sessionDate", "")
             s_start = session.get("startTime", "")
             s_end = session.get("endTime", "")
-            s_track_idx = session.get("track", 0)
-            s_track_name = ""
-            if track_names and 0 < s_track_idx <= len(track_names):
-                s_track_name = track_names[s_track_idx - 1]
-            elif session.get("trackLabel"):
-                s_track_name = session["trackLabel"]
+            s_track_name = global_track_name or session.get("trackLabel", "")
             s_title = session.get("sessionName", "")
             s_room = session.get("location", "")
             s_chair = session.get("sessionChair", "")
@@ -751,6 +912,7 @@ async def poster_run(request: Request):
         session_count = int(body.get("session_count", 44))
         prevent_same_presenter = bool(body.get("prevent_same_presenter", False))
         optimize_within = bool(body.get("optimize_within_layout", True))
+        use_abstracts = body.get("use_abstracts", True)
 
         conferences = discover_conferences()
         conf = _resolve_conference(conference, conferences)
@@ -769,6 +931,7 @@ async def poster_run(request: Request):
         config.POSTER_FLOOR_PLAN = layout_type
         config.POSTER_RECT_COLS = cols
         config.POSTER_PROXIMITY = optimize_within
+        config.USE_ABSTRACTS = bool(use_abstracts)
         config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
 
         papers = get_papers(conf)
@@ -791,6 +954,19 @@ async def poster_run(request: Request):
             num_slots=config.POSTER_NUM_SLOTS,
             num_parallel=config.POSTER_NUM_PARALLEL,
         )
+
+        # Context-aware session naming (bottom-up cascade)
+        if poster_result.org_result:
+            try:
+                naming_llm = LLMClient()
+                name_sessions(poster_result.org_result.sessions, taxonomy_root,
+                              papers_map, naming_llm)
+                org_session_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                for ps in poster_result.poster_sessions:
+                    if ps.session_id in org_session_names:
+                        ps.name = org_session_names[ps.session_id]
+            except Exception as e:
+                logger.warning(f"Poster session naming failed, keeping original names: {e}")
 
         # Build response
         sessions_out = []
@@ -888,6 +1064,156 @@ async def poster_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/api/poster/run-stream")
+async def poster_run_stream(request: Request):
+    """Run poster session organization with SSE progress streaming."""
+    from starlette.responses import StreamingResponse
+
+    body = await request.json()
+
+    def generate():
+        try:
+            conference = body.get("conference", "SIGIR25")
+            layout_type = body.get("layout_type", "rectangle")
+            board_count = int(body.get("board_count", 12))
+            rows = int(body.get("rows", 3))
+            cols = int(body.get("cols", 4))
+            session_count = int(body.get("session_count", 44))
+            prevent_same_presenter = bool(body.get("prevent_same_presenter", False))
+            optimize_within = bool(body.get("optimize_within_layout", True))
+            use_abstracts = body.get("use_abstracts", True)
+
+            conferences = discover_conferences()
+            conf = _resolve_conference(conference, conferences)
+
+            if layout_type == "rectangle":
+                session_capacity = rows * cols
+            else:
+                session_capacity = board_count
+
+            config.POSTER_SESSION_MIN = max(1, session_capacity // 2)
+            config.POSTER_SESSION_MAX = session_capacity
+            config.POSTER_NUM_SLOTS = max(1, session_count // max(1, 2))
+            config.POSTER_NUM_PARALLEL = min(session_count, 2)
+            config.POSTER_FLOOR_PLAN = layout_type
+            config.POSTER_RECT_COLS = cols
+            config.POSTER_PROXIMITY = optimize_within
+            config.USE_ABSTRACTS = bool(use_abstracts)
+            config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
+
+            _ensure_live_pricing()
+
+            # Step 1
+            yield f"data: {json.dumps({'type':'progress','step':1,'total':8,'msg':f'Loading {conference} papers and building similarity matrix...'})}\n\n"
+            papers = get_papers(conf)
+            papers_map = {p.id: p for p in papers}
+
+            # Step 2 (clear cache to force rebuild)
+            _taxonomy_cache.pop(conf, None)
+            yield f"data: {json.dumps({'type':'progress','step':2,'total':8,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
+            taxonomy_root = get_taxonomy(conf, papers)
+
+            floor_plan = FloorPlanType(layout_type) if layout_type in ("line", "circle", "rectangle") else FloorPlanType.RECTANGLE
+
+            # Step 3
+            yield f"data: {json.dumps({'type':'progress','step':3,'total':8,'msg':'Forming poster sessions and scheduling into time slots...'})}\n\n"
+            poster_result = run_poster_pipeline(
+                papers=papers, taxonomy_root=taxonomy_root,
+                floor_plan=floor_plan, rect_cols=cols,
+                enable_proximity=optimize_within,
+                avoid_conflicts=prevent_same_presenter,
+                num_slots=config.POSTER_NUM_SLOTS,
+                num_parallel=config.POSTER_NUM_PARALLEL,
+            )
+
+            # Step 4
+            yield f"data: {json.dumps({'type':'progress','step':4,'total':8,'msg':'Optimizing board layout for topical proximity...'})}\n\n"
+            # (already done inside run_poster_pipeline, but status update is useful)
+
+            # Step 5
+            yield f"data: {json.dumps({'type':'progress','step':5,'total':8,'msg':f'Generating names for {len(poster_result.poster_sessions)} sessions...'})}\n\n"
+            if poster_result.org_result:
+                try:
+                    naming_llm = LLMClient()
+                    from session_namer import name_sessions as _name
+                    _name(poster_result.org_result.sessions, taxonomy_root, papers_map, naming_llm)
+                    org_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                    for ps in poster_result.poster_sessions:
+                        if ps.session_id in org_names:
+                            ps.name = org_names[ps.session_id]
+                except Exception as e:
+                    logger.warning(f"Poster naming failed: {e}")
+
+            # Step 6
+            yield f"data: {json.dumps({'type':'progress','step':6,'total':8,'msg':'Building poster grid layout...'})}\n\n"
+            sessions_out = []
+            placements = {}
+            for ps in poster_result.poster_sessions:
+                session_data = {
+                    "id": ps.session_id, "sessionName": ps.name,
+                    "description": ps.description,
+                    "slot": ps.time_slot, "area": ps.area,
+                    "paperCount": len(ps.assignments),
+                    "cells": [], "papers": [],
+                }
+                cell_map = {}
+                for a in ps.assignments:
+                    p = papers_map.get(a.paper_id)
+                    if p:
+                        pd = {"id": p.id, "title": p.title, "abstract": p.abstract,
+                              "authors": p.authors, "presenters": p.authors}
+                        cell_map[a.board.index] = pd
+                        session_data["papers"].append(pd)
+                        placements[p.id] = {"sessionId": ps.session_id, "cellIndex": a.board.index}
+                for idx in range(session_capacity):
+                    session_data["cells"].append(cell_map.get(idx, None))
+                sessions_out.append(session_data)
+
+            all_papers = [{"id": p.id, "title": p.title, "abstract": p.abstract,
+                           "authors": p.authors, "presenters": p.authors} for p in papers]
+
+            # Step 7
+            yield f"data: {json.dumps({'type':'progress','step':7,'total':8,'msg':'Reviewing sessions for misplaced papers...'})}\n\n"
+            hard_papers, review_status = _llm_review_sessions(sessions_out, mode="poster")
+
+            # Step 8
+            yield f"data: {json.dumps({'type':'progress','step':8,'total':8,'msg':'Finalizing results...'})}\n\n"
+            try:
+                tracker_data = get_global_tracker().to_dict()
+                save_run_token_stats(conf, "poster", {
+                    "calls": tracker_data.get("total_calls", 0),
+                    "prompt_tokens": tracker_data.get("total_prompt_tokens", 0),
+                    "completion_tokens": tracker_data.get("total_completion_tokens", 0),
+                    "total_tokens": tracker_data.get("total_tokens", 0),
+                    "cost_usd": tracker_data.get("total_cost_usd", 0.0),
+                    "provider": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+                })
+            except Exception:
+                pass
+
+            response = {
+                "result": {
+                    "sessions": sessions_out, "papers": all_papers,
+                    "placements": placements, "hardPapers": hard_papers,
+                    "reviewStatus": review_status, "layoutType": layout_type,
+                    "rows": rows, "cols": cols, "boardCount": board_count,
+                    "sessionCount": len(sessions_out),
+                    "sessionCapacity": session_capacity,
+                    "optimizeWithinLayout": optimize_within,
+                    "stats": poster_result.stats,
+                    "tokenUsage": get_global_tracker().to_dict(),
+                }
+            }
+            yield f"data: {json.dumps({'type':'result','data':response})}\n\n"
+
+        except Exception as e:
+            logger.error(f"poster/run-stream error: {e}\n{traceback.format_exc()}")
+            yield f"data: {json.dumps({'type':'error','error':str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+
 # ════════════════════════════════════════════════════════════════════
 # API: Paper Assignment (placeholder)
 # ════════════════════════════════════════════════════════════════════
@@ -982,13 +1308,8 @@ def _llm_review_sessions(sessions_out: list[dict], mode: str = "oral"
     Returns (hard_papers, review_status) where review_status contains
     diagnostic info for the API response.
     """
-    has_api_key = bool(
-        os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY")
-        or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or os.environ.get("XAI_API_KEY")
-    )
+    has_api_key = bool(os.environ.get("OPENROUTER_API_KEY")
+                       or _manual_api_keys.get("openrouter"))
     if not has_api_key:
         logger.info(f"No LLM API key found; skipping {mode} session review")
         return [], {"status": "skipped", "reason": "No LLM API key configured"}
@@ -1339,82 +1660,53 @@ _manual_api_keys: dict[str, str] = {}
 
 # Map provider -> environment variable name
 _PROVIDER_ENV_KEYS = {
-    "openai": "OPENAI_API_KEY",
-    "google": "GOOGLE_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "xai": "XAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
 }
-
-# Models that Anthropic doesn't expose via a list endpoint
-_ANTHROPIC_MODELS = [
-    "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4",
-    "claude-opus-4-6", "claude-opus-4-5",
-    "claude-haiku-4-5",
-]
-
 
 @app.get("/api/models")
 async def list_models(provider: str = None):
-    """Fetch available models from a provider's API.
+    """Fetch available models from OpenRouter API with pricing.
 
-    Returns a list of model IDs suitable for chat/completion.
-    Requires a valid API key (env var or manual) for the provider.
+    Returns a list of model IDs grouped by provider, with per-model pricing.
+    Requires OPENROUTER_API_KEY.
     """
-    prov = (provider or getattr(config, "LLM_PROVIDER", "openai")).lower()
-    env_key = _PROVIDER_ENV_KEYS.get(prov, "")
-    api_key = os.environ.get(env_key) or _manual_api_keys.get(prov)
-
-    if not api_key and prov != "anthropic":
-        # Anthropic has no list endpoint anyway; others need a key
-        return {"success": False, "error": f"No API key configured for {prov}", "models": []}
+    api_key = os.environ.get("OPENROUTER_API_KEY") or _manual_api_keys.get("openrouter")
+    if not api_key:
+        return {"success": False, "error": "No OpenRouter API key configured", "models": []}
 
     try:
-        if prov == "openai":
-            from openai import OpenAI
-            client = OpenAI()
-            raw = client.models.list()
-            # Keep chat-relevant models: gpt-*, o3*, o4*
-            models = sorted(
-                m.id for m in raw
-                if any(m.id.startswith(p) for p in ("gpt-", "o3", "o4"))
-                and "audio" not in m.id
-                and "realtime" not in m.id
-                and "search" not in m.id
-            )
+        import httpx
+        headers = {"Authorization": f"Bearer {api_key}"}
+        resp = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15)
+        data = resp.json().get("data", [])
 
-        elif prov == "google":
-            from google import genai
-            gapi_key = api_key or os.environ.get("GEMINI_API_KEY")
-            if not gapi_key:
-                return {"success": False, "error": "No API key configured for google", "models": []}
-            client = genai.Client(api_key=gapi_key)
-            raw = client.models.list()
-            models = sorted(
-                m.name.removeprefix("models/") for m in raw
-                if "generateContent" in (m.supported_actions or [])
-                and "gemini" in m.name
-                and "image" not in m.name
-                and "tts" not in m.name
-                and "audio" not in m.name
-                and "live" not in m.name
-                and "thinking" not in m.name
-            )
+        models_with_pricing = []
+        for m in data:
+            mid = m.get("id", "")
+            # Filter to text-capable models
+            arch = m.get("architecture", {})
+            output_mods = arch.get("output_modalities", []) if arch else []
+            if output_mods and "text" not in output_mods:
+                continue
+            pricing = m.get("pricing", {})
+            prompt_price = float(pricing.get("prompt", "0") or "0")
+            completion_price = float(pricing.get("completion", "0") or "0")
+            models_with_pricing.append({
+                "id": mid,
+                "name": m.get("name", mid),
+                "context_length": m.get("context_length", 0),
+                "prompt_price_per_1m": round(prompt_price * 1_000_000, 4),
+                "completion_price_per_1m": round(completion_price * 1_000_000, 4),
+            })
+        models_with_pricing.sort(key=lambda x: x["id"])
 
-        elif prov == "anthropic":
-            # Anthropic has no list-models endpoint; return curated list
-            models = list(_ANTHROPIC_MODELS)
+        # Populate live pricing cache for accurate cost estimation
+        from token_tracker import set_live_pricing
+        set_live_pricing(models_with_pricing)
 
-        elif prov == "xai":
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
-            raw = client.models.list()
-            models = sorted(
-                m.id for m in raw
-                if "grok" in m.id
-            )
-
-        else:
-            return {"success": False, "error": f"Unknown provider: {prov}", "models": []}
+        return {"success": True,
+                "models": [m["id"] for m in models_with_pricing],
+                "models_with_pricing": models_with_pricing}
 
         return {"success": True, "models": models}
 
@@ -1426,7 +1718,7 @@ async def list_models(provider: str = None):
 @app.get("/api/settings")
 async def get_settings():
     """Return current settings from the config module."""
-    provider = getattr(config, "LLM_PROVIDER", "openai")
+    provider = getattr(config, "LLM_PROVIDER", "openrouter")
     env_key = _PROVIDER_ENV_KEYS.get(provider, "")
     has_key = bool(os.environ.get(env_key) or _manual_api_keys.get(provider))
 
@@ -1474,20 +1766,15 @@ async def update_settings(request: Request):
     body = await request.json()
 
     llm = body.get("llm", {})
-    if llm.get("provider"):
-        config.LLM_PROVIDER = llm["provider"]
+    # Force provider to openrouter (only supported provider)
+    config.LLM_PROVIDER = "openrouter"
     if llm.get("model"):
         config.LLM_MODEL = llm["model"]
-    if llm.get("temperature") is not None:
-        config.LLM_TEMPERATURE = float(llm["temperature"])
     if llm.get("api_key"):
-        # Store manual key in session memory AND set as env var so LLMClient picks it up
-        provider = llm.get("provider", config.LLM_PROVIDER)
-        env_key = _PROVIDER_ENV_KEYS.get(provider, "")
-        if env_key:
-            _manual_api_keys[provider] = llm["api_key"]
-            os.environ[env_key] = llm["api_key"]
-            logger.info(f"Manual API key set for provider '{provider}' (session-only)")
+        # Store manual key for OpenRouter
+        _manual_api_keys["openrouter"] = llm["api_key"]
+        os.environ["OPENROUTER_API_KEY"] = llm["api_key"]
+        logger.info("Manual OpenRouter API key set (session-only)")
 
     oral = body.get("oral", {})
     if oral.get("method"):
@@ -1531,21 +1818,18 @@ async def update_settings(request: Request):
 async def test_llm_connection(request: Request):
     """Test LLM connectivity with current or provided settings."""
     body = await request.json()
-    provider = body.get("provider", config.LLM_PROVIDER)
     model = body.get("model", config.LLM_MODEL)
 
     # If a manual key is provided, temporarily set it
     temp_key = body.get("api_key")
-    env_key = _PROVIDER_ENV_KEYS.get(provider, "")
-    old_env = None
-    if temp_key and env_key:
-        old_env = os.environ.get(env_key)
-        os.environ[env_key] = temp_key
+    old_env = os.environ.get("OPENROUTER_API_KEY")
+    if temp_key:
+        os.environ["OPENROUTER_API_KEY"] = temp_key
 
     # Temporarily override config for this test
     old_provider = config.LLM_PROVIDER
     old_model = config.LLM_MODEL
-    config.LLM_PROVIDER = provider
+    config.LLM_PROVIDER = "openrouter"
     config.LLM_MODEL = model
 
     try:
@@ -1557,11 +1841,11 @@ async def test_llm_connection(request: Request):
     finally:
         config.LLM_PROVIDER = old_provider
         config.LLM_MODEL = old_model
-        if temp_key and env_key:
+        if temp_key:
             if old_env is not None:
-                os.environ[env_key] = old_env
+                os.environ["OPENROUTER_API_KEY"] = old_env
             else:
-                os.environ.pop(env_key, None)
+                os.environ.pop("OPENROUTER_API_KEY", None)
 
 
 # ════════════════════════════════════════════════════════════════════

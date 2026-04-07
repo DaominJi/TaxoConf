@@ -11,60 +11,161 @@ import { showToast } from "../toast.js";
 /* ═══════════════════ Constants ═══════════════════ */
 
 export const PROVIDER_KEY_PLACEHOLDERS = {
-  openai:    "sk-...",
-  google:    "AI...",
-  anthropic: "sk-ant-...",
-  xai:       "xai-...",
+  openrouter: "sk-or-...",
 };
 
+/* Fallback models when OpenRouter API is not available (grouped by provider) */
 export const PROVIDER_MODELS = {
-  openai:    ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o3", "o4-mini"],
-  google:    ["gemini-2.0-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"],
-  anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4", "claude-opus-4-6", "claude-opus-4-5", "claude-haiku-4-5"],
-  xai:       ["grok-3-mini", "grok-3", "grok-4", "grok-4-fast"],
+  openrouter: [
+    "openai/gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4.1", "openai/gpt-4.1-mini",
+    "openai/gpt-5.4", "openai/o3-mini", "openai/o4-mini",
+    "anthropic/claude-sonnet-4-6", "anthropic/claude-sonnet-4-5",
+    "anthropic/claude-opus-4-6", "anthropic/claude-haiku-4-5",
+    "google/gemini-2.5-flash", "google/gemini-2.5-pro",
+    "google/gemini-3-flash-preview", "google/gemini-3.1-pro-preview",
+    "x-ai/grok-3", "x-ai/grok-4",
+  ],
 };
 
 /* Tracks which providers have API keys configured (populated by loadSettings) */
 export let _apiKeysStatus = {};
 
+/* Cached pricing data from OpenRouter (model_id -> {prompt, completion}) */
+let _modelPricingCache = {};
+
+/* Full model list from last API fetch (for re-filtering without re-fetching) */
+let _allFetchedModels = [];
+let _allFetchedPricing = [];
+
 /* ═══════════════════ Internal helpers ═══════════════════ */
 
-function _populateModelSelect(models, keepValue) {
+function _populateModelSelect(models, keepValue, pricingList) {
   const sel = document.getElementById("settingsModel");
   const prev = keepValue || sel.value;
   sel.innerHTML = "";
+
+  // Build pricing lookup if provided
+  if (pricingList && Array.isArray(pricingList)) {
+    pricingList.forEach((m) => {
+      _modelPricingCache[m.id] = {
+        prompt: m.prompt_price_per_1m,
+        completion: m.completion_price_per_1m,
+        name: m.name || m.id,
+        context: m.context_length || 0,
+      };
+    });
+  }
+
+  // Group models by provider prefix (e.g., "openai/gpt-4o" → "OpenAI")
+  const providerNames = {
+    openai: "OpenAI", anthropic: "Anthropic", google: "Google",
+    "x-ai": "xAI", meta: "Meta", deepseek: "DeepSeek",
+    mistralai: "Mistral", cohere: "Cohere", qwen: "Qwen",
+  };
+  const groups = {};
+  const ungrouped = [];
   models.forEach((m) => {
+    const slash = m.indexOf("/");
+    if (slash > 0) {
+      const prefix = m.substring(0, slash);
+      if (!groups[prefix]) groups[prefix] = [];
+      groups[prefix].push(m);
+    } else {
+      ungrouped.push(m);
+    }
+  });
+
+  // Render grouped models with <optgroup>
+  const orderedPrefixes = ["openai", "anthropic", "google", "x-ai", "meta", "deepseek", "mistralai"];
+  const renderOpt = (m) => {
     const opt = document.createElement("option");
     opt.value = m;
-    opt.textContent = m;
-    sel.appendChild(opt);
+    const shortName = m.includes("/") ? m.split("/").slice(1).join("/") : m;
+    const pricing = _modelPricingCache[m];
+    if (pricing && (pricing.prompt > 0 || pricing.completion > 0)) {
+      opt.textContent = `${shortName}  ($${pricing.prompt} / $${pricing.completion} per 1M)`;
+    } else {
+      opt.textContent = shortName;
+    }
+    return opt;
+  };
+
+  // Render in preferred order first, then remaining
+  const rendered = new Set();
+  orderedPrefixes.forEach((prefix) => {
+    if (groups[prefix]) {
+      const label = providerNames[prefix] || prefix;
+      const grp = document.createElement("optgroup");
+      grp.label = label;
+      groups[prefix].forEach((m) => grp.appendChild(renderOpt(m)));
+      sel.appendChild(grp);
+      rendered.add(prefix);
+    }
   });
+  Object.keys(groups).sort().forEach((prefix) => {
+    if (!rendered.has(prefix)) {
+      const label = providerNames[prefix] || prefix;
+      const grp = document.createElement("optgroup");
+      grp.label = label;
+      groups[prefix].forEach((m) => grp.appendChild(renderOpt(m)));
+      sel.appendChild(grp);
+    }
+  });
+  ungrouped.forEach((m) => sel.appendChild(renderOpt(m)));
+
   if (models.includes(prev)) {
     sel.value = prev;
+  }
+  _updatePricingDisplay();
+}
+
+function _updatePricingDisplay() {
+  const sel = document.getElementById("settingsModel");
+  const el = document.getElementById("settingsModelPricing");
+  if (!el || !sel) return;
+  const modelId = sel.value;
+  const p = _modelPricingCache[modelId];
+  if (p && (p.prompt > 0 || p.completion > 0)) {
+    const ctx = p.context ? ` | Context: ${(p.context / 1000).toFixed(0)}K tokens` : "";
+    el.innerHTML = `<strong>Pricing:</strong> $${p.prompt}/1M input, $${p.completion}/1M output${ctx}`;
+  } else {
+    el.textContent = "";
   }
 }
 
 /* ═══════════════════ Public functions ═══════════════════ */
 
 export async function updateModelDropdown(keepValue) {
-  const prov = document.getElementById("settingsProvider").value;
   updateKeyStatus();
   updateKeyPlaceholder();
 
-  /* Try fetching live models from the provider API */
-  try {
-    const res = await fetch(`${API_BASE}/models?provider=${prov}`);
-    const data = await res.json();
-    if (data.success && data.models && data.models.length > 0) {
-      _populateModelSelect(data.models, keepValue);
-      return;
-    }
-  } catch (_) {
-    /* fall through to hardcoded list */
+  /* Fetch models from OpenRouter API if not cached */
+  if (_allFetchedModels.length === 0) {
+    try {
+      const res = await fetch(`${API_BASE}/models?provider=openrouter`);
+      const data = await res.json();
+      if (data.success && data.models && data.models.length > 0) {
+        _allFetchedModels = data.models;
+        _allFetchedPricing = data.models_with_pricing || [];
+      }
+    } catch (_) { /* fall through to hardcoded list */ }
   }
 
-  /* Fallback: use hardcoded list */
-  _populateModelSelect(PROVIDER_MODELS[prov] || [], keepValue);
+  const models = _allFetchedModels.length > 0 ? _allFetchedModels : (PROVIDER_MODELS.openrouter || []);
+  const pricing = _allFetchedPricing;
+
+  /* Apply provider filter */
+  const filter = document.getElementById("settingsProviderFilter")?.value || "";
+  const filtered = filter ? models.filter(m => m.startsWith(filter + "/")) : models;
+  const filteredPricing = filter ? pricing.filter(m => m.id.startsWith(filter + "/")) : pricing;
+
+  _populateModelSelect(filtered, keepValue, filteredPricing);
+}
+
+/** Re-filter models without re-fetching (called when provider filter changes). */
+export function filterModels() {
+  const current = document.getElementById("settingsModel")?.value || "";
+  updateModelDropdown(current);
 }
 
 export function updateKeyStatus() {
@@ -97,7 +198,7 @@ export async function loadSettings() {
     const s = data.result || data;
     if (s.llm) {
       if (s.llm.api_keys_status) _apiKeysStatus = s.llm.api_keys_status;
-      document.getElementById("settingsProvider").value = s.llm.provider || "openai";
+      document.getElementById("settingsProvider").value = "openrouter";
       await updateModelDropdown(s.llm.model || "");
       const src = s.llm.api_key_source || "environment";
       document.querySelectorAll('input[name="apiKeySource"]').forEach((r) => (r.checked = r.value === src));
@@ -116,7 +217,6 @@ export async function saveSettings() {
   const apiKeySource = document.querySelector('input[name="apiKeySource"]:checked').value;
   const body = {
     llm: {
-      provider: document.getElementById("settingsProvider").value,
       model: document.getElementById("settingsModel").value,
       api_key_source: apiKeySource,
     },
@@ -159,9 +259,7 @@ export async function testLLMConnection() {
   resultEl.style.color = "var(--ink-soft)";
 
   const apiKeySource = document.querySelector('input[name="apiKeySource"]:checked').value;
-  const prov = document.getElementById("settingsProvider").value;
   const body = {
-    provider: prov,
     model: document.getElementById("settingsModel").value,
   };
   if (apiKeySource === "manual") {
@@ -173,11 +271,8 @@ export async function testLLMConnection() {
       return;
     }
     body.api_key = key;
-  } else if (!_apiKeysStatus[prov]) {
-    resultEl.textContent =
-      "No API key found. Set "
-      + ({ openai: "OPENAI_API_KEY", google: "GOOGLE_API_KEY", anthropic: "ANTHROPIC_API_KEY", xai: "XAI_API_KEY" }[prov] || "the env var")
-      + " or enter one manually.";
+  } else if (!_apiKeysStatus["openrouter"]) {
+    resultEl.textContent = "No API key found. Set OPENROUTER_API_KEY or enter one manually.";
     resultEl.style.color = "var(--danger, #c44)";
     btn.disabled = false;
     return;
@@ -210,7 +305,8 @@ export async function testLLMConnection() {
 /* ═══════════════════ Event setup ═══════════════════ */
 
 export function setupSettingsEvents() {
-  document.getElementById("settingsProvider").addEventListener("change", () => updateModelDropdown());
+  document.getElementById("settingsProviderFilter").addEventListener("change", filterModels);
+  document.getElementById("settingsModel").addEventListener("change", _updatePricingDisplay);
   document.querySelectorAll('input[name="apiKeySource"]').forEach((r) => {
     r.addEventListener("change", toggleManualKeyRow);
   });

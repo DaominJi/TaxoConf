@@ -12,18 +12,13 @@ mode: both                           # "oral", "poster", or "both"
 demo: false                          # Use synthetic demo data (no LLM needed)
 
 # ─── LLM Settings ───────────────────────────────────────────────────
-# Supported providers: "openai", "google", "anthropic", "xai"
-#
-# Provider    | Env Variable       | Example Models
-# ------------|--------------------|-----------------------------------------
-# openai      | OPENAI_API_KEY     | gpt-4o, gpt-4o-mini, gpt-4.1, gpt-5.4, o3-mini
-# google      | GOOGLE_API_KEY     | gemini-2.5-pro, gemini-2.5-flash, gemini-3.1-pro-preview
-# anthropic   | ANTHROPIC_API_KEY  | claude-sonnet-4-6, claude-opus-4-6, claude-haiku-4-5
-# xai         | XAI_API_KEY        | grok-3, grok-3-mini, grok-4
+# LLM access is unified via OpenRouter (https://openrouter.ai)
+# Set OPENROUTER_API_KEY environment variable or enter key in the UI.
+# Models use "provider/model" format, e.g. "openai/gpt-4o"
 #
 llm:
-  provider: openai              # LLM provider (openai / google / anthropic / xai)
-  model: gpt-5.4        # Model name (provider-specific)
+  provider: openrouter           # Unified LLM provider via OpenRouter
+  model: google/gemini-3.1-flash-lite-preview  # Model name (provider/model format)
   temperature: 0.3              # Low temperature for deterministic outputs
   max_retries: 3                # Retries on API failure
   max_workers: 16               # Max parallel threads for taxonomy expansion

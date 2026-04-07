@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, apiPostStream, requireApiResult } from "../api.js";
 import {
   submissionDist,
   avgDist,
@@ -18,7 +18,7 @@ import {
   escapeHtml,
   formatNum,
   loadingHtml,
-  setRunState,
+  setRunState, updateRunMessage,
   renderConferenceSelect,
   ensureSessionMetadata,
   sessionSpeakersChairLabel,
@@ -300,7 +300,7 @@ function setTrackLocation(track, location) {
 function ensureTrackNames(result, K) {
   if (!result.trackNames || result.trackNames.length < K) {
     result.trackNames = Array.from({ length: K }, (_, i) =>
-      (result.trackNames && result.trackNames[i]) || `Location ${String.fromCharCode(65 + i)}`
+      (result.trackNames && result.trackNames[i]) || `Track ${String.fromCharCode(65 + i)}`
     );
   }
   return result.trackNames;
@@ -465,15 +465,20 @@ export async function runOralOrganization() {
   state.oral.isRunning = true;
   state.oral.activeSessionId = null;
   state.oral.activeHardPaperId = null;
-  setRunState("oral", true, "Computing conflict-free sessions and optimizing within-session similarity...");
+  setRunState("oral", true, "Preparing...");
   renderOralResults();
+
   try {
-    const resp = await apiPost("/oral/run", {
+    const useAbstracts = document.getElementById("oralUseAbstractsInput")?.checked ?? true;
+    const resp = await apiPostStream("/oral/run-stream", {
       conference: state.oral.conference,
       parallel_sessions: state.oral.parallelSessions,
       time_slots: state.oral.timeSlots,
       max_per_session: state.oral.maxPerSession,
       min_per_session: state.oral.minPerSession,
+      use_abstracts: useAbstracts,
+    }, (progress) => {
+      updateRunMessage("oral", `Step ${progress.step}/${progress.total}: ${progress.msg}`);
     });
     state.oral.result = prepareOralResult(requireApiResult(resp, "Oral organization"));
     state.oral.activeSessionId = null;
@@ -824,9 +829,7 @@ export function renderOralResults() {
   const exportBtn = document.getElementById("exportOralBtn");
 
   const result = state.oral.result;
-  const loadingBanner = state.oral.isRunning
-    ? loadingHtml("Optimizing the oral schedule. This may take a short while on the full demo data.")
-    : "";
+  const loadingBanner = "";  /* Progress shown in toolbar spinner */
   renderOralCapacityNotice();
   if (exportBtn) exportBtn.disabled = state.oral.isRunning || !result;
 
@@ -871,23 +874,27 @@ export function renderOralResults() {
     }
   });
 
+  const trackName = result.trackName || "";
   schedulePanel.innerHTML = `${loadingBanner}
     <div class="schedule-shell">
+      <div class="grid-track-name-row">
+        <label class="grid-field" style="flex-direction:row;align-items:center;gap:8px">
+          <span style="white-space:nowrap;font-weight:600">Track:</span>
+          <input class="grid-inline-input" id="oralTrackNameInput" type="text" value="${escapeHtml(trackName)}" placeholder="e.g. Full Paper Track, Industrial Track" style="max-width:400px">
+        </label>
+      </div>
       <table>
         <thead>
           <tr>
             <th class="grid-header-slot">Schedule</th>
-            ${(() => {
-              const names = ensureTrackNames(result, K);
-              return Array.from({ length: K }, (_, i) => {
-                const track = i + 1;
-                const loc = trackLocations[track] || "";
-                return `<th class="grid-header-track">
-                  <input class="grid-inline-input grid-track-name" data-track-name="${track}" type="text" value="${escapeHtml(names[i])}" placeholder="Track name">
-                  <input class="grid-inline-input" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
-                </th>`;
-              }).join("");
-            })()}
+            ${Array.from({ length: K }, (_, i) => {
+              const track = i + 1;
+              const loc = trackLocations[track] || "";
+              return `<th class="grid-header-track">
+                <div class="grid-track-label">Location ${track}</div>
+                <input class="grid-inline-input grid-track-room" data-track-location="${track}" type="text" value="${escapeHtml(loc)}" placeholder="Room / Location">
+              </th>`;
+            }).join("")}
           </tr>
         </thead>
         <tbody>
@@ -1007,8 +1014,14 @@ export function renderOralResults() {
       const startEl = schedulePanel.querySelector(`[data-slot-start="${slot}"]`);
       const endEl = schedulePanel.querySelector(`[data-slot-end="${slot}"]`);
       setSlotTimeFields(slot, { startTime: startEl?.value, endTime: endEl?.value, sessionDate: el.value });
-    } else if (el.dataset.trackName) {
-      setTrackName(Number(el.dataset.trackName), el.value);
+    } else if (el.id === "oralTrackNameInput") {
+      // Single track name for all sessions
+      const result = state.oral.result;
+      if (result) {
+        result.trackName = el.value.trim();
+        result.sessions.forEach((s) => { ensureSessionMetadata(s); s.trackLabel = el.value.trim(); });
+        autoSaveOralProgress();
+      }
     } else if (el.dataset.trackLocation) {
       setTrackLocation(Number(el.dataset.trackLocation), el.value);
     }
@@ -1044,11 +1057,25 @@ function oralSessionAnchorId(session) {
 export function buildOralExportHtml() {
   const result = state.oral.result;
   if (!result) return "";
+  const globalTrackName = result.trackName || "";
+  const trackLocations = {};
+  result.sessions.forEach((s) => {
+    ensureSessionMetadata(s);
+    if (s.track && !trackLocations[s.track]) trackLocations[s.track] = s.location;
+  });
+
   const rows = [];
   for (let slot = 1; slot <= state.oral.timeSlots; slot += 1) {
+    const firstSession = findOralSession(result, scheduleSessionId(slot, 1));
+    const timeLabel = firstSession ? sessionTimeLabel(firstSession) : "";
+    const dateLabel = firstSession ? (firstSession.sessionDate || "") : "";
     rows.push(`
       <tr>
-        <td><div class="slot-label">Slot ${slot}</div></td>
+        <td>
+          <div class="slot-label">Slot ${slot}</div>
+          ${dateLabel ? `<div class="slot-meta">${escapeHtml(dateLabel)}</div>` : ""}
+          ${timeLabel ? `<div class="slot-meta">${escapeHtml(timeLabel)}</div>` : ""}
+        </td>
         ${Array.from({ length: state.oral.parallelSessions }, (_, idx) => {
           const track = idx + 1;
           const session = findOralSession(result, scheduleSessionId(slot, track));
@@ -1057,7 +1084,7 @@ export function buildOralExportHtml() {
             <td>
               <a class="schedule-link" href="#${oralSessionAnchorId(session)}">
                 <strong>${escapeHtml(oralSessionName(session))}</strong>
-                <span>${escapeHtml(session.trackLabel || `Track ${track}`)} \u00b7 ${session.papers.length} papers</span>
+                <span>${session.papers.length} papers</span>
               </a>
             </td>
           `;
@@ -1087,8 +1114,8 @@ export function buildOralExportHtml() {
       <div class="meta-grid">
         ${exportMetaCard("Date", session.sessionDate)}
         ${exportMetaCard("Time", sessionTimeLabel(session))}
-        ${exportMetaCard("Track", session.trackLabel || oralSessionLabel(session.id))}
-        ${exportMetaCard("Room / Location", session.location)}
+        ${globalTrackName ? exportMetaCard("Track", globalTrackName) : ""}
+        ${exportMetaCard("Location", session.location)}
         ${exportMetaCard("Chair", session.sessionChair)}
       </div>
       <div class="paper-list">
@@ -1107,18 +1134,22 @@ export function buildOralExportHtml() {
   const summaryHtml = [
     exportSummaryChip("Papers", totalPapers),
     exportSummaryChip("Sessions", result.sessions.length),
-    exportSummaryChip("Tracks", state.oral.parallelSessions),
+    globalTrackName ? exportSummaryChip("Track", globalTrackName) : "",
+    exportSummaryChip("Locations", state.oral.parallelSessions),
     exportSummaryChip("Time Slots", state.oral.timeSlots),
-  ].join("");
+  ].filter(Boolean).join("");
   return buildStyledExportHtml({
-    title: "Oral Session Schedule",
-    subtitle: `${result.sessions.length} sessions across ${state.oral.parallelSessions} parallel tracks and ${state.oral.timeSlots} time slots.`,
+    title: globalTrackName || "Oral Session Schedule",
+    subtitle: `${result.sessions.length} sessions across ${state.oral.parallelSessions} locations and ${state.oral.timeSlots} time slots.`,
     conference: state.oral.conference,
     summaryHtml,
     headerHtml: `
       <tr>
-        <th>Time Slot</th>
-        ${Array.from({ length: state.oral.parallelSessions }, (_, idx) => `<th>Track ${idx + 1}</th>`).join("")}
+        <th>Schedule</th>
+        ${Array.from({ length: state.oral.parallelSessions }, (_, idx) => {
+          const loc = trackLocations[idx + 1] || `Location ${idx + 1}`;
+          return `<th>${escapeHtml(loc)}</th>`;
+        }).join("")}
       </tr>
     `,
     rowsHtml: rows.join(""),
@@ -1129,8 +1160,7 @@ export function buildOralExportHtml() {
 export function buildOralExportCsv() {
   const result = state.oral.result;
   if (!result) return "";
-  const K = state.oral.parallelSessions;
-  const names = ensureTrackNames(result, K);
+  const globalTrackName = result.trackName || "";
   const rows = [[
     "*Date",
     "*Time Start",
@@ -1145,7 +1175,7 @@ export function buildOralExportCsv() {
   ]];
   result.sessions.forEach((session) => {
     ensureSessionMetadata(session);
-    const trackName = (session.track && names[session.track - 1]) || session.trackLabel || "";
+    const trackName = globalTrackName || session.trackLabel || "";
     rows.push([
       session.sessionDate || "",
       session.startTime || "",
@@ -1215,7 +1245,7 @@ export function setupOralEvents() {
               track: s.track || 0,
               location: s.location || "",
             })),
-            trackNames: result.trackNames || [],
+            trackName: result.trackName || "",
           }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
