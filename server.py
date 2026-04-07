@@ -546,6 +546,132 @@ async def oral_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/api/oral/run-stream")
+async def oral_run_stream(request: Request):
+    """Run oral session organization with SSE progress streaming."""
+    from starlette.responses import StreamingResponse
+
+    body = await request.json()
+
+    def generate():
+        try:
+            conference = body.get("conference", "SIGIR25")
+            parallel_sessions = int(body.get("parallel_sessions", 7))
+            time_slots = int(body.get("time_slots", 19))
+            max_per_session = int(body.get("max_per_session", 4))
+            min_per_session = int(body.get("min_per_session", 3))
+            use_abstracts = body.get("use_abstracts", True)
+
+            conferences = discover_conferences()
+            conf = _resolve_conference(conference, conferences)
+
+            config.SESSION_MIN = min_per_session
+            config.SESSION_MAX = max_per_session
+            config.NUM_SLOTS = time_slots
+            config.NUM_PARALLEL_TRACKS = parallel_sessions
+            config.USE_ABSTRACTS = bool(use_abstracts)
+
+            # Step 1: Load papers + build similarity
+            yield f"data: {json.dumps({'type':'progress','step':1,'total':7,'msg':'Loading papers and building similarity matrix...'})}\n\n"
+            papers = get_papers(conf)
+            papers_map = {p.id: p for p in papers}
+
+            # Step 2: Taxonomy construction
+            yield f"data: {json.dumps({'type':'progress','step':2,'total':7,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
+            taxonomy_root = get_taxonomy(conf, papers)
+
+            # Step 3: Session formation
+            yield f"data: {json.dumps({'type':'progress','step':3,'total':7,'msg':'Forming sessions from taxonomy leaves...'})}\n\n"
+            from session_organizer import run_oral_organization as _run_oral
+            result = _run_oral(papers, taxonomy_root)
+
+            # Step 4: Session naming (bottom-up cascade)
+            yield f"data: {json.dumps({'type':'progress','step':4,'total':7,'msg':f'Generating names for {len(result.sessions)} sessions (bottom-up cascade)...'})}\n\n"
+            try:
+                naming_llm = LLMClient()
+                # name_sessions includes normalization
+                from session_namer import name_sessions as _name
+                _name(result.sessions, taxonomy_root, papers_map, naming_llm)
+            except Exception as e:
+                logger.warning(f"Session naming failed: {e}")
+
+            # Step 5: Build response
+            yield f"data: {json.dumps({'type':'progress','step':5,'total':7,'msg':'Building schedule grid...'})}\n\n"
+            sessions_out = []
+            assignment_map = {}
+            for s in result.sessions:
+                slot_1 = (s.time_slot or 0) + 1
+                track_1 = (s.track or 0) + 1
+                frontend_id = f"slot_{slot_1}_track_{track_1}"
+                session_data = {
+                    "id": frontend_id,
+                    "sessionName": s.name,
+                    "description": s.description,
+                    "slot": slot_1, "track": track_1,
+                    "paperCount": len(s.paper_ids),
+                    "targetSize": max_per_session,
+                    "papers": [],
+                }
+                for pid in s.paper_ids:
+                    p = papers_map.get(pid)
+                    if p:
+                        session_data["papers"].append({
+                            "id": p.id, "title": p.title,
+                            "abstract": p.abstract, "authors": p.authors,
+                            "presenters": p.authors,
+                        })
+                        assignment_map[p.id] = frontend_id
+                sessions_out.append(session_data)
+
+            all_papers = [{"id": p.id, "title": p.title, "abstract": p.abstract,
+                           "authors": p.authors, "presenters": p.authors} for p in papers]
+
+            # Step 6: LLM session review
+            yield f"data: {json.dumps({'type':'progress','step':6,'total':7,'msg':'Reviewing sessions for misplaced papers...'})}\n\n"
+            hard_papers, review_status = _llm_review_sessions(sessions_out, mode="oral")
+
+            # Step 7: Finalize
+            yield f"data: {json.dumps({'type':'progress','step':7,'total':7,'msg':'Finalizing results...'})}\n\n"
+
+            # Save token stats
+            try:
+                tracker_data = get_global_tracker().to_dict()
+                save_run_token_stats(conf, "oral", {
+                    "calls": tracker_data.get("total_calls", 0),
+                    "prompt_tokens": tracker_data.get("total_prompt_tokens", 0),
+                    "completion_tokens": tracker_data.get("total_completion_tokens", 0),
+                    "total_tokens": tracker_data.get("total_tokens", 0),
+                    "cost_usd": tracker_data.get("total_cost_usd", 0.0),
+                    "provider": config.LLM_PROVIDER,
+                    "model": config.LLM_MODEL,
+                })
+            except Exception:
+                pass
+
+            response = {
+                "result": {
+                    "sessions": sessions_out,
+                    "papers": all_papers,
+                    "assignment": assignment_map,
+                    "hardPapers": hard_papers,
+                    "reviewStatus": review_status,
+                    "stats": result.stats,
+                    "parallelSessions": parallel_sessions,
+                    "timeSlots": time_slots,
+                    "maxPerSession": max_per_session,
+                    "minPerSession": min_per_session,
+                    "tokenUsage": get_global_tracker().to_dict(),
+                }
+            }
+            yield f"data: {json.dumps({'type':'result','data':response})}\n\n"
+
+        except Exception as e:
+            logger.error(f"oral/run-stream error: {e}\n{traceback.format_exc()}")
+            yield f"data: {json.dumps({'type':'error','error':str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 # ── Excel export ─────────────────────────────────────────────────────
 
 @app.post("/api/{mode}/export-excel")
@@ -913,6 +1039,153 @@ async def poster_run(request: Request):
     except Exception as e:
         logger.error(f"poster/run error: {e}\n{traceback.format_exc()}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/poster/run-stream")
+async def poster_run_stream(request: Request):
+    """Run poster session organization with SSE progress streaming."""
+    from starlette.responses import StreamingResponse
+
+    body = await request.json()
+
+    def generate():
+        try:
+            conference = body.get("conference", "SIGIR25")
+            layout_type = body.get("layout_type", "rectangle")
+            board_count = int(body.get("board_count", 12))
+            rows = int(body.get("rows", 3))
+            cols = int(body.get("cols", 4))
+            session_count = int(body.get("session_count", 44))
+            prevent_same_presenter = bool(body.get("prevent_same_presenter", False))
+            optimize_within = bool(body.get("optimize_within_layout", True))
+            use_abstracts = body.get("use_abstracts", True)
+
+            conferences = discover_conferences()
+            conf = _resolve_conference(conference, conferences)
+
+            if layout_type == "rectangle":
+                session_capacity = rows * cols
+            else:
+                session_capacity = board_count
+
+            config.POSTER_SESSION_MIN = max(1, session_capacity // 2)
+            config.POSTER_SESSION_MAX = session_capacity
+            config.POSTER_NUM_SLOTS = max(1, session_count // max(1, 2))
+            config.POSTER_NUM_PARALLEL = min(session_count, 2)
+            config.POSTER_FLOOR_PLAN = layout_type
+            config.POSTER_RECT_COLS = cols
+            config.POSTER_PROXIMITY = optimize_within
+            config.USE_ABSTRACTS = bool(use_abstracts)
+            config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
+
+            # Step 1
+            yield f"data: {json.dumps({'type':'progress','step':1,'total':8,'msg':f'Loading {conference} papers and building similarity matrix...'})}\n\n"
+            papers = get_papers(conf)
+            papers_map = {p.id: p for p in papers}
+
+            # Step 2
+            yield f"data: {json.dumps({'type':'progress','step':2,'total':8,'msg':f'Constructing topic taxonomy for {len(papers)} papers via LLM...'})}\n\n"
+            taxonomy_root = get_taxonomy(conf, papers)
+
+            floor_plan = FloorPlanType(layout_type) if layout_type in ("line", "circle", "rectangle") else FloorPlanType.RECTANGLE
+
+            # Step 3
+            yield f"data: {json.dumps({'type':'progress','step':3,'total':8,'msg':'Forming poster sessions and scheduling into time slots...'})}\n\n"
+            poster_result = run_poster_pipeline(
+                papers=papers, taxonomy_root=taxonomy_root,
+                floor_plan=floor_plan, rect_cols=cols,
+                enable_proximity=optimize_within,
+                avoid_conflicts=prevent_same_presenter,
+                num_slots=config.POSTER_NUM_SLOTS,
+                num_parallel=config.POSTER_NUM_PARALLEL,
+            )
+
+            # Step 4
+            yield f"data: {json.dumps({'type':'progress','step':4,'total':8,'msg':'Optimizing board layout for topical proximity...'})}\n\n"
+            # (already done inside run_poster_pipeline, but status update is useful)
+
+            # Step 5
+            yield f"data: {json.dumps({'type':'progress','step':5,'total':8,'msg':f'Generating names for {len(poster_result.poster_sessions)} sessions...'})}\n\n"
+            if poster_result.org_result:
+                try:
+                    naming_llm = LLMClient()
+                    from session_namer import name_sessions as _name
+                    _name(poster_result.org_result.sessions, taxonomy_root, papers_map, naming_llm)
+                    org_names = {s.session_id: s.name for s in poster_result.org_result.sessions}
+                    for ps in poster_result.poster_sessions:
+                        if ps.session_id in org_names:
+                            ps.name = org_names[ps.session_id]
+                except Exception as e:
+                    logger.warning(f"Poster naming failed: {e}")
+
+            # Step 6
+            yield f"data: {json.dumps({'type':'progress','step':6,'total':8,'msg':'Building poster grid layout...'})}\n\n"
+            sessions_out = []
+            placements = {}
+            for ps in poster_result.poster_sessions:
+                session_data = {
+                    "id": ps.session_id, "sessionName": ps.name,
+                    "description": ps.description,
+                    "slot": ps.time_slot, "area": ps.area,
+                    "paperCount": len(ps.assignments),
+                    "cells": [], "papers": [],
+                }
+                cell_map = {}
+                for a in ps.assignments:
+                    p = papers_map.get(a.paper_id)
+                    if p:
+                        pd = {"id": p.id, "title": p.title, "abstract": p.abstract,
+                              "authors": p.authors, "presenters": p.authors}
+                        cell_map[a.board.index] = pd
+                        session_data["papers"].append(pd)
+                        placements[p.id] = {"sessionId": ps.session_id, "cellIndex": a.board.index}
+                for idx in range(session_capacity):
+                    session_data["cells"].append(cell_map.get(idx, None))
+                sessions_out.append(session_data)
+
+            all_papers = [{"id": p.id, "title": p.title, "abstract": p.abstract,
+                           "authors": p.authors, "presenters": p.authors} for p in papers]
+
+            # Step 7
+            yield f"data: {json.dumps({'type':'progress','step':7,'total':8,'msg':'Reviewing sessions for misplaced papers...'})}\n\n"
+            hard_papers, review_status = _llm_review_sessions(sessions_out, mode="poster")
+
+            # Step 8
+            yield f"data: {json.dumps({'type':'progress','step':8,'total':8,'msg':'Finalizing results...'})}\n\n"
+            try:
+                tracker_data = get_global_tracker().to_dict()
+                save_run_token_stats(conf, "poster", {
+                    "calls": tracker_data.get("total_calls", 0),
+                    "prompt_tokens": tracker_data.get("total_prompt_tokens", 0),
+                    "completion_tokens": tracker_data.get("total_completion_tokens", 0),
+                    "total_tokens": tracker_data.get("total_tokens", 0),
+                    "cost_usd": tracker_data.get("total_cost_usd", 0.0),
+                    "provider": config.LLM_PROVIDER, "model": config.LLM_MODEL,
+                })
+            except Exception:
+                pass
+
+            response = {
+                "result": {
+                    "sessions": sessions_out, "papers": all_papers,
+                    "placements": placements, "hardPapers": hard_papers,
+                    "reviewStatus": review_status, "layoutType": layout_type,
+                    "rows": rows, "cols": cols, "boardCount": board_count,
+                    "sessionCount": len(sessions_out),
+                    "sessionCapacity": session_capacity,
+                    "optimizeWithinLayout": optimize_within,
+                    "stats": poster_result.stats,
+                    "tokenUsage": get_global_tracker().to_dict(),
+                }
+            }
+            yield f"data: {json.dumps({'type':'result','data':response})}\n\n"
+
+        except Exception as e:
+            logger.error(f"poster/run-stream error: {e}\n{traceback.format_exc()}")
+            yield f"data: {json.dumps({'type':'error','error':str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
 
 
 # ════════════════════════════════════════════════════════════════════

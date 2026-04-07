@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, apiPostStream, requireApiResult } from "../api.js";
 import {
   submissionDist,
   similarity,
@@ -543,25 +543,9 @@ export async function runPosterOrganization() {
   setRunState("poster", true, "Preparing...");
   renderPosterResults();
 
-  /* Progress ticker */
-  const progressSteps = [
-    { delay: 0, msg: "Step 1/8: Building paper similarity matrix..." },
-    { delay: 5000, msg: "Step 2/8: Constructing topic taxonomy via LLM..." },
-    { delay: 20000, msg: "Step 3/8: Forming poster sessions from taxonomy..." },
-    { delay: 35000, msg: "Step 4/8: Scheduling sessions into time slots..." },
-    { delay: 45000, msg: "Step 5/8: Optimizing board layout for topical proximity..." },
-    { delay: 60000, msg: "Step 6/8: Generating session names (bottom-up cascade)..." },
-    { delay: 80000, msg: "Step 7/8: Normalizing session names (global consistency check)..." },
-    { delay: 95000, msg: "Step 8/8: Reviewing sessions for misplaced papers..." },
-    { delay: 140000, msg: "Still working... large conferences may take a few minutes." },
-  ];
-  const progressTimers = progressSteps.map(s =>
-    setTimeout(() => updateRunMessage("poster", s.msg), s.delay)
-  );
-
   try {
     const useAbstracts = document.getElementById("posterUseAbstractsInput")?.checked ?? true;
-    const resp = await apiPost("/poster/run", {
+    const resp = await apiPostStream("/poster/run-stream", {
       conference: state.poster.conference,
       layout_type: state.poster.layoutType,
       board_count: state.poster.boardCount,
@@ -571,6 +555,8 @@ export async function runPosterOrganization() {
       prevent_same_presenter: state.poster.preventSamePresenter,
       optimize_within_layout: state.poster.optimizeWithinLayout,
       use_abstracts: useAbstracts,
+    }, (progress) => {
+      updateRunMessage("poster", `Step ${progress.step}/${progress.total}: ${progress.msg}`);
     });
     state.poster.result = preparePosterResult(requireApiResult(resp, "Poster organization"));
     state.poster.optimizeWithinLayout = Boolean(state.poster.result && state.poster.result.optimizeWithinLayout);
@@ -587,7 +573,6 @@ export async function runPosterOrganization() {
   } catch (err) {
     alert(`Poster organization backend error: ${err.message}`);
   } finally {
-    progressTimers.forEach(t => clearTimeout(t));
     state.poster.isRunning = false;
     setRunState("poster", false);
     renderPosterResults();

@@ -7,7 +7,7 @@
  */
 
 import { state } from "../state.js";
-import { API_BASE, apiGet, apiPost, requireApiResult } from "../api.js";
+import { API_BASE, apiGet, apiPost, apiPostStream, requireApiResult } from "../api.js";
 import {
   submissionDist,
   avgDist,
@@ -468,30 +468,17 @@ export async function runOralOrganization() {
   setRunState("oral", true, "Preparing...");
   renderOralResults();
 
-  /* Progress ticker: cycle through pipeline stage messages */
-  const progressSteps = [
-    { delay: 0, msg: "Step 1/7: Building paper similarity matrix..." },
-    { delay: 5000, msg: "Step 2/7: Constructing topic taxonomy via LLM..." },
-    { delay: 20000, msg: "Step 3/7: Forming sessions from taxonomy leaves..." },
-    { delay: 35000, msg: "Step 4/7: Scheduling sessions into time slots (conflict avoidance)..." },
-    { delay: 50000, msg: "Step 5/7: Generating session names (bottom-up cascade)..." },
-    { delay: 70000, msg: "Step 6/7: Normalizing session names (global consistency check)..." },
-    { delay: 85000, msg: "Step 7/7: Reviewing sessions for misplaced papers..." },
-    { delay: 130000, msg: "Still working... large conferences may take a few minutes." },
-  ];
-  const progressTimers = progressSteps.map(s =>
-    setTimeout(() => updateRunMessage("oral", s.msg), s.delay)
-  );
-
   try {
     const useAbstracts = document.getElementById("oralUseAbstractsInput")?.checked ?? true;
-    const resp = await apiPost("/oral/run", {
+    const resp = await apiPostStream("/oral/run-stream", {
       conference: state.oral.conference,
       parallel_sessions: state.oral.parallelSessions,
       time_slots: state.oral.timeSlots,
       max_per_session: state.oral.maxPerSession,
       min_per_session: state.oral.minPerSession,
       use_abstracts: useAbstracts,
+    }, (progress) => {
+      updateRunMessage("oral", `Step ${progress.step}/${progress.total}: ${progress.msg}`);
     });
     state.oral.result = prepareOralResult(requireApiResult(resp, "Oral organization"));
     state.oral.activeSessionId = null;
@@ -507,7 +494,6 @@ export async function runOralOrganization() {
   } catch (err) {
     alert(`Oral organization backend error: ${err.message}`);
   } finally {
-    progressTimers.forEach(t => clearTimeout(t));
     state.oral.isRunning = false;
     setRunState("oral", false);
     renderOralResults();
