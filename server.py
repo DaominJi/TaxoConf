@@ -547,6 +547,35 @@ async def oral_run(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+def _ensure_live_pricing():
+    """Fetch live pricing from OpenRouter if not already cached."""
+    from token_tracker import _live_pricing, set_live_pricing
+    if _live_pricing:
+        return  # Already loaded
+    api_key = os.environ.get("OPENROUTER_API_KEY") or _manual_api_keys.get("openrouter")
+    if not api_key:
+        return
+    try:
+        import httpx
+        headers = {"Authorization": f"Bearer {api_key}"}
+        resp = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15)
+        data = resp.json().get("data", [])
+        pricing_list = []
+        for m in data:
+            pricing = m.get("pricing", {})
+            prompt_price = float(pricing.get("prompt", "0") or "0")
+            completion_price = float(pricing.get("completion", "0") or "0")
+            if prompt_price > 0 or completion_price > 0:
+                pricing_list.append({
+                    "id": m.get("id", ""),
+                    "prompt_price_per_1m": round(prompt_price * 1_000_000, 4),
+                    "completion_price_per_1m": round(completion_price * 1_000_000, 4),
+                })
+        set_live_pricing(pricing_list)
+    except Exception as e:
+        logger.warning(f"Failed to fetch live pricing: {e}")
+
+
 @app.post("/api/oral/run-stream")
 async def oral_run_stream(request: Request):
     """Run oral session organization with SSE progress streaming."""
@@ -571,6 +600,9 @@ async def oral_run_stream(request: Request):
             config.NUM_SLOTS = time_slots
             config.NUM_PARALLEL_TRACKS = parallel_sessions
             config.USE_ABSTRACTS = bool(use_abstracts)
+
+            # Ensure live pricing is loaded for accurate cost tracking
+            _ensure_live_pricing()
 
             # Step 1: Load papers + build similarity
             yield f"data: {json.dumps({'type':'progress','step':1,'total':7,'msg':'Loading papers and building similarity matrix...'})}\n\n"
@@ -1079,6 +1111,8 @@ async def poster_run_stream(request: Request):
             config.POSTER_PROXIMITY = optimize_within
             config.USE_ABSTRACTS = bool(use_abstracts)
             config.POSTER_ENABLE_CONFLICT_AVOIDANCE = prevent_same_presenter
+
+            _ensure_live_pricing()
 
             # Step 1
             yield f"data: {json.dumps({'type':'progress','step':1,'total':8,'msg':f'Loading {conference} papers and building similarity matrix...'})}\n\n"
@@ -1682,6 +1716,11 @@ async def list_models(provider: str = None):
                 "completion_price_per_1m": round(completion_price * 1_000_000, 4),
             })
         models_with_pricing.sort(key=lambda x: x["id"])
+
+        # Populate live pricing cache for accurate cost estimation
+        from token_tracker import set_live_pricing
+        set_live_pricing(models_with_pricing)
+
         return {"success": True,
                 "models": [m["id"] for m in models_with_pricing],
                 "models_with_pricing": models_with_pricing}

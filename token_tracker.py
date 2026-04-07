@@ -85,46 +85,57 @@ PRICING: dict[str, dict[str, tuple[float, float]]] = {
 }
 
 
+# ── Live pricing cache (populated from OpenRouter API) ────────────
+
+_live_pricing: dict[str, tuple[float, float]] = {}
+# model_id -> (input_per_1M, output_per_1M)
+
+
+def set_live_pricing(models_with_pricing: list[dict]):
+    """Populate live pricing cache from OpenRouter API response.
+
+    Each entry: {"id": "openai/gpt-4o", "prompt_price_per_1m": 2.5,
+                 "completion_price_per_1m": 10.0}
+    """
+    for m in models_with_pricing:
+        mid = m.get("id", "")
+        inp = m.get("prompt_price_per_1m", 0.0)
+        out = m.get("completion_price_per_1m", 0.0)
+        if mid and (inp > 0 or out > 0):
+            _live_pricing[mid] = (inp, out)
+    logger.info(f"Live pricing loaded: {len(_live_pricing)} models")
+
+
 def _lookup_price(provider: str, model: str) -> tuple[float, float]:
     """Look up (input_per_1M, output_per_1M) for a provider + model.
 
-    For OpenRouter models (format "provider/model"), strips the prefix
-    and looks up in the original provider's pricing table.
+    Priority:
+    1. Live pricing from OpenRouter API (exact match)
+    2. Static PRICING table (prefix match fallback)
     """
-    # OpenRouter models: "openai/gpt-4o" → lookup in PRICING["openai"] for "gpt-4o"
+    # 1. Try live pricing (exact match on model ID)
+    if model in _live_pricing:
+        return _live_pricing[model]
+
+    # 2. Fall back to static pricing table
+    # For OpenRouter models, strip prefix and look in original provider
+    lookup_provider = provider
+    lookup_model = model
     if provider == "openrouter" and "/" in model:
         orig_provider, orig_model = model.split("/", 1)
-        # Map OpenRouter provider prefixes to our pricing table keys
-        provider_map = {
-            "openai": "openai", "anthropic": "anthropic",
-            "google": "google", "x-ai": "xai",
-            "meta-llama": "openai",  # use openai default pricing as fallback
-            "deepseek": "openai",
-            "mistralai": "openai",
-        }
-        mapped_provider = provider_map.get(orig_provider, orig_provider)
-        result = _lookup_in_provider(mapped_provider, orig_model)
-        if result != (0.0, 0.0):
-            return result
-        # Try with full model name as fallback
-        return _lookup_in_provider(mapped_provider, model)
+        provider_map = {"x-ai": "xai"}
+        lookup_provider = provider_map.get(orig_provider, orig_provider)
+        lookup_model = orig_model
 
-    return _lookup_in_provider(provider, model)
-
-
-def _lookup_in_provider(provider: str, model: str) -> tuple[float, float]:
-    """Look up price in a specific provider's pricing table."""
-    provider_prices = PRICING.get(provider, {})
+    provider_prices = PRICING.get(lookup_provider, {})
     if not provider_prices:
         return (0.0, 0.0)
 
-    # Try exact match first, then prefix match (longest first)
-    if model in provider_prices:
-        return provider_prices[model]
+    if lookup_model in provider_prices:
+        return provider_prices[lookup_model]
 
-    # Prefix matching: sort by length descending to match most specific first
     for prefix in sorted(provider_prices.keys(), key=len, reverse=True):
-        if prefix != "_default" and model.startswith(prefix):
+        if prefix != "_default" and lookup_model.startswith(prefix):
             return provider_prices[prefix]
 
     return provider_prices.get("_default", (0.0, 0.0))
