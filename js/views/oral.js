@@ -1057,11 +1057,25 @@ function oralSessionAnchorId(session) {
 export function buildOralExportHtml() {
   const result = state.oral.result;
   if (!result) return "";
+  const globalTrackName = result.trackName || "";
+  const trackLocations = {};
+  result.sessions.forEach((s) => {
+    ensureSessionMetadata(s);
+    if (s.track && !trackLocations[s.track]) trackLocations[s.track] = s.location;
+  });
+
   const rows = [];
   for (let slot = 1; slot <= state.oral.timeSlots; slot += 1) {
+    const firstSession = findOralSession(result, scheduleSessionId(slot, 1));
+    const timeLabel = firstSession ? sessionTimeLabel(firstSession) : "";
+    const dateLabel = firstSession ? (firstSession.sessionDate || "") : "";
     rows.push(`
       <tr>
-        <td><div class="slot-label">Slot ${slot}</div></td>
+        <td>
+          <div class="slot-label">Slot ${slot}</div>
+          ${dateLabel ? `<div class="slot-meta">${escapeHtml(dateLabel)}</div>` : ""}
+          ${timeLabel ? `<div class="slot-meta">${escapeHtml(timeLabel)}</div>` : ""}
+        </td>
         ${Array.from({ length: state.oral.parallelSessions }, (_, idx) => {
           const track = idx + 1;
           const session = findOralSession(result, scheduleSessionId(slot, track));
@@ -1070,7 +1084,7 @@ export function buildOralExportHtml() {
             <td>
               <a class="schedule-link" href="#${oralSessionAnchorId(session)}">
                 <strong>${escapeHtml(oralSessionName(session))}</strong>
-                <span>${escapeHtml(session.trackLabel || `Track ${track}`)} \u00b7 ${session.papers.length} papers</span>
+                <span>${session.papers.length} papers</span>
               </a>
             </td>
           `;
@@ -1100,8 +1114,8 @@ export function buildOralExportHtml() {
       <div class="meta-grid">
         ${exportMetaCard("Date", session.sessionDate)}
         ${exportMetaCard("Time", sessionTimeLabel(session))}
-        ${exportMetaCard("Track", session.trackLabel || oralSessionLabel(session.id))}
-        ${exportMetaCard("Room / Location", session.location)}
+        ${globalTrackName ? exportMetaCard("Track", globalTrackName) : ""}
+        ${exportMetaCard("Location", session.location)}
         ${exportMetaCard("Chair", session.sessionChair)}
       </div>
       <div class="paper-list">
@@ -1120,18 +1134,22 @@ export function buildOralExportHtml() {
   const summaryHtml = [
     exportSummaryChip("Papers", totalPapers),
     exportSummaryChip("Sessions", result.sessions.length),
-    exportSummaryChip("Tracks", state.oral.parallelSessions),
+    globalTrackName ? exportSummaryChip("Track", globalTrackName) : "",
+    exportSummaryChip("Locations", state.oral.parallelSessions),
     exportSummaryChip("Time Slots", state.oral.timeSlots),
-  ].join("");
+  ].filter(Boolean).join("");
   return buildStyledExportHtml({
-    title: "Oral Session Schedule",
-    subtitle: `${result.sessions.length} sessions across ${state.oral.parallelSessions} parallel tracks and ${state.oral.timeSlots} time slots.`,
+    title: globalTrackName || "Oral Session Schedule",
+    subtitle: `${result.sessions.length} sessions across ${state.oral.parallelSessions} locations and ${state.oral.timeSlots} time slots.`,
     conference: state.oral.conference,
     summaryHtml,
     headerHtml: `
       <tr>
-        <th>Time Slot</th>
-        ${Array.from({ length: state.oral.parallelSessions }, (_, idx) => `<th>Track ${idx + 1}</th>`).join("")}
+        <th>Schedule</th>
+        ${Array.from({ length: state.oral.parallelSessions }, (_, idx) => {
+          const loc = trackLocations[idx + 1] || `Location ${idx + 1}`;
+          return `<th>${escapeHtml(loc)}</th>`;
+        }).join("")}
       </tr>
     `,
     rowsHtml: rows.join(""),

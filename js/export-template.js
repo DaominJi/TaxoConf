@@ -63,20 +63,21 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
   <title>${escapeHtml(title)} \u2014 ${confLabel}</title>
   <style>
     :root {
-      --bg-1: #f8f2e7;
-      --bg-2: #edf5f3;
-      --paper: rgba(255, 255, 255, 0.9);
-      --panel: rgba(255, 255, 255, 0.78);
-      --ink: #1d2a37;
-      --ink-soft: #5b6f7b;
-      --line: #d6e1dd;
-      --accent: #128684;
-      --accent-strong: #0f706e;
-      --accent-warm: #da6c31;
-      --shadow: 0 22px 44px rgba(25, 47, 63, 0.12);
-      --radius-xl: 28px;
-      --radius-lg: 20px;
-      --radius-md: 14px;
+      --bg: #f7f8fa;
+      --paper: #ffffff;
+      --ink: #1a1a2e;
+      --ink-soft: #64748b;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --accent-strong: #1d4ed8;
+      --accent-warm: #f59e0b;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow: 0 4px 16px rgba(0,0,0,0.06);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.08);
+      --radius-xl: 16px;
+      --radius-lg: 12px;
+      --radius-md: 8px;
     }
 
     * { box-sizing: border-box; }
@@ -85,11 +86,9 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
     body {
       margin: 0;
       color: var(--ink);
-      font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
-      background:
-        radial-gradient(circle at 8% 0%, rgba(218, 108, 49, 0.16), transparent 36%),
-        radial-gradient(circle at 88% 12%, rgba(18, 134, 132, 0.18), transparent 38%),
-        linear-gradient(165deg, var(--bg-1), var(--bg-2) 56%, #faf0e2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      line-height: 1.6;
     }
 
     .page {
@@ -101,53 +100,39 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
 
     .hero {
       border-radius: var(--radius-xl);
-      padding: 30px 32px 28px;
-      background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 253, 251, 0.9)),
-        linear-gradient(120deg, rgba(18, 134, 132, 0.08), rgba(218, 108, 49, 0.06));
-      border: 1px solid rgba(255, 255, 255, 0.85);
+      padding: 32px 36px 28px;
+      background: var(--paper);
+      border: 1px solid var(--line);
       box-shadow: var(--shadow);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::after {
-      content: "";
-      position: absolute;
-      inset: auto -90px -110px auto;
-      width: 280px; height: 280px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(18, 134, 132, 0.14), rgba(18, 134, 132, 0));
-      pointer-events: none;
     }
 
     .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      background: rgba(18, 134, 132, 0.1);
-      border: 1px solid rgba(18, 134, 132, 0.14);
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      background: var(--accent-light);
       color: var(--accent-strong);
-      font-size: 0.74rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
 
     h1 {
-      margin: 14px 0 6px;
-      font-size: clamp(1.9rem, 3vw, 2.8rem);
-      letter-spacing: -0.04em;
+      margin: 12px 0 6px;
+      font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
     }
 
     .hero-subtitle {
-      max-width: 760px;
+      max-width: 700px;
       margin: 0;
       color: var(--ink-soft);
-      font-size: 0.98rem;
-      line-height: 1.65;
+      font-size: 0.92rem;
+      line-height: 1.6;
     }
 
     .hero-meta {
@@ -165,11 +150,10 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
     }
 
     .summary-chip {
-      padding: 14px 16px;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.7);
-      border: 1px solid rgba(214, 225, 221, 0.9);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      background: var(--accent-light);
+      border: 1px solid #dbeafe;
     }
 
     .summary-chip span {
@@ -194,12 +178,12 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
       z-index: 10;
       margin-top: 16px;
       padding: 10px 16px;
-      border-radius: var(--radius-lg);
-      background: rgba(255, 255, 255, 0.92);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid var(--line);
-      box-shadow: 0 4px 16px rgba(25, 47, 63, 0.06);
+      box-shadow: var(--shadow-sm);
       display: flex;
       gap: 10px;
       align-items: center;
@@ -236,15 +220,15 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
       margin-top: 20px;
       border-radius: var(--radius-lg);
       background: var(--paper);
-      border: 1px solid rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
       box-shadow: var(--shadow);
       overflow: hidden;
     }
 
     .surface-head {
-      padding: 20px 22px 14px;
-      border-bottom: 1px solid rgba(214, 225, 221, 0.88);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
+      padding: 20px 24px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fafbfc;
     }
 
     .surface-head h2 {
@@ -272,68 +256,62 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
     }
 
     th, td {
-      padding: 12px 10px;
-      border-right: 1px solid rgba(214, 225, 221, 0.92);
-      border-bottom: 1px solid rgba(214, 225, 221, 0.92);
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
       vertical-align: top;
-      background: rgba(255, 255, 255, 0.7);
     }
-
-    th:first-child, td:first-child { border-left: 1px solid rgba(214, 225, 221, 0.92); }
 
     thead th {
-      background: linear-gradient(180deg, rgba(234, 246, 243, 0.95), rgba(246, 251, 249, 0.95));
-      color: #355766;
+      background: var(--accent-light);
+      color: var(--accent-strong);
       text-align: left;
-      font-size: 0.82rem;
+      font-size: 0.78rem;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
+      border-bottom: 2px solid #bfdbfe;
     }
 
-    thead th:first-child { border-top-left-radius: 16px; }
-    thead th:last-child { border-top-right-radius: 16px; }
-    tbody tr:last-child td:first-child { border-bottom-left-radius: 16px; }
-    tbody tr:last-child td:last-child { border-bottom-right-radius: 16px; }
-
     .slot-label { font-weight: 700; color: var(--ink); font-size: 0.9rem; }
+
+    .slot-meta { font-size: 0.75rem; color: var(--ink-soft); margin-top: 2px; }
 
     .schedule-link {
       display: block;
       text-decoration: none;
       color: var(--ink);
-      border-radius: 14px;
-      padding: 12px 13px;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(242, 249, 246, 0.95));
-      border: 1px solid rgba(214, 225, 221, 0.9);
-      min-height: 72px;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      min-height: 60px;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
 
     .schedule-link:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 14px 28px rgba(25, 47, 63, 0.08);
-      border-color: rgba(18, 134, 132, 0.28);
+      border-color: var(--accent);
+      box-shadow: var(--shadow-sm);
     }
 
-    .schedule-link strong { display: block; font-size: 0.88rem; line-height: 1.35; }
-    .schedule-link span { display: block; margin-top: 5px; color: var(--ink-soft); font-size: 0.77rem; line-height: 1.45; }
+    .schedule-link strong { display: block; font-size: 0.84rem; line-height: 1.35; }
+    .schedule-link span { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 0.75rem; }
 
     /* ── Session cards ─────────────── */
 
     .session-list { display: grid; gap: 18px; padding: 18px; }
 
     .session-card {
-      border-radius: 22px;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 250, 0.96));
-      border: 1px solid rgba(214, 225, 221, 0.88);
-      box-shadow: 0 16px 30px rgba(25, 47, 63, 0.07);
-      padding: 22px 22px 20px;
+      border-radius: var(--radius-lg);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 24px;
       scroll-margin-top: 80px;
     }
 
     .session-card:target {
-      border-color: rgba(18, 134, 132, 0.42);
-      box-shadow: 0 18px 34px rgba(18, 134, 132, 0.14);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
     .session-card.is-hidden { display: none; }
@@ -359,21 +337,21 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
     .session-nav a, .back-link {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       text-decoration: none;
-      color: var(--accent-strong);
-      background: rgba(18, 134, 132, 0.08);
-      border: 1px solid rgba(18, 134, 132, 0.16);
-      border-radius: 999px;
-      padding: 6px 12px;
-      font-size: 0.74rem;
-      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-light);
+      border: 1px solid #dbeafe;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
       white-space: nowrap;
       transition: background 0.15s;
     }
 
     .session-nav a:hover, .back-link:hover {
-      background: rgba(18, 134, 132, 0.16);
+      background: #dbeafe;
     }
 
     /* ── Meta cards ────────────────── */
@@ -386,10 +364,10 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
     }
 
     .meta-card {
-      padding: 12px 13px;
-      border-radius: 16px;
-      background: rgba(245, 250, 248, 0.86);
-      border: 1px solid rgba(214, 225, 221, 0.9);
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      background: #f8fafc;
+      border: 1px solid var(--line);
     }
 
     .meta-card span {
@@ -408,10 +386,10 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
     .paper-list { display: grid; gap: 10px; }
 
     .paper-item {
-      padding: 14px 15px;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.82);
-      border: 1px solid rgba(214, 225, 221, 0.86);
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: #fff;
+      border: 1px solid var(--line);
     }
 
     .paper-item strong { display: block; margin-bottom: 4px; font-size: 0.9rem; line-height: 1.45; }
@@ -441,9 +419,9 @@ export function buildStyledExportHtml({ title, subtitle, conference, summaryHtml
       position: fixed;
       bottom: 24px;
       right: 24px;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
       background: var(--accent);
       color: #fff;
       border: none;
