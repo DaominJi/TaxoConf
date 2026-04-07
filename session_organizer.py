@@ -357,11 +357,19 @@ class GreedySessionFormer:
         max_p = self.stc.max_papers
 
         # Step 1.1: Initialize effective_papers on each node
+        # Only leaf nodes should have papers; internal nodes should be empty
+        # (papers live in children). If an internal node still has paper_ids,
+        # it means the taxonomy builder didn't fully clear it — skip those
+        # to prevent duplicates.
         node_papers: dict[str, list[str]] = {}  # node_id → effective papers
         bubbled: dict[str, list[str]] = {}       # node_id → bubbled-up papers
 
         def init(node):
-            node_papers[node.node_id] = list(node.paper_ids)
+            if node.is_leaf or not node.children:
+                node_papers[node.node_id] = list(node.paper_ids)
+            else:
+                # Internal node: papers should be in children, not here
+                node_papers[node.node_id] = []
             bubbled[node.node_id] = []
             for child in node.children:
                 init(child)
